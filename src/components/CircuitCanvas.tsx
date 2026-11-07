@@ -376,10 +376,10 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
       style={{ touchAction: 'none' }}
-      className="relative flex-1 w-full h-full bg-[#0a0f1d] overflow-hidden cursor-crosshair select-none"
+      className="relative flex-1 w-full h-full bg-[#0e1013] overflow-hidden cursor-crosshair select-none"
     >
       {/* Background Blueprint Grid pattern */}
-      <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40">
+      <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-60">
         <defs>
           <pattern
             id="grid-pattern-small"
@@ -388,7 +388,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
             patternUnits="userSpaceOnUse"
             patternTransform={`translate(${pan.x}, ${pan.y})`}
           >
-            <circle cx="1" cy="1" r="0.75" fill="#334155" />
+            <circle cx="1" cy="1" r="0.75" fill="#22252e" />
           </pattern>
           <pattern
             id="grid-pattern-major"
@@ -397,7 +397,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
             patternUnits="userSpaceOnUse"
             patternTransform={`translate(${pan.x}, ${pan.y})`}
           >
-            <rect width={GRID_SIZE * 5 * zoom} height={GRID_SIZE * 5 * zoom} fill="none" stroke="#1e293b" strokeWidth="0.8" />
+            <rect width={GRID_SIZE * 5 * zoom} height={GRID_SIZE * 5 * zoom} fill="none" stroke="#16181f" strokeWidth="0.8" />
           </pattern>
         </defs>
         <rect width="100%" height="100%" fill="url(#grid-pattern-small)" />
@@ -820,9 +820,9 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
 
       {/* Mobile & Desktop Wiring Guidance Banner */}
       {wiringFromPinId && (
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-sky-950/95 border border-sky-400 text-sky-200 px-4 py-2 rounded-full shadow-2xl text-xs font-semibold flex items-center gap-3 backdrop-blur-md animate-in fade-in max-w-[92vw]">
-          <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-ping shrink-0" />
-          <span className="truncate">Wiring: Tap any terminal to connect</span>
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 bg-[#141820] border border-[#2c3d52] text-[#d6e4f8] px-3.5 py-1.5 rounded-lg shadow-2xl text-xs font-medium flex items-center gap-2.5 max-w-[92vw]">
+          <span className="w-2 h-2 rounded-full bg-[#38bdf8] animate-pulse shrink-0" />
+          <span className="truncate">Wiring Mode: Click or tap another terminal to connect</span>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -833,7 +833,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               e.stopPropagation();
               setWiringFromPinId(null);
             }}
-            className="px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-200 text-xs font-bold border border-slate-700 shrink-0 cursor-pointer"
+            className="px-2.5 py-1 rounded-md bg-[#1f2734] hover:bg-[#283242] active:bg-[#181f2a] text-[#d6e4f8] text-xs font-medium border border-[#32455e] shrink-0 cursor-pointer"
           >
             Cancel
           </button>
@@ -843,43 +843,43 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
       {/* Floating Hover Measurement Tooltip */}
       {hoverTooltip && (
         <div
-          className="fixed pointer-events-none z-50 bg-slate-900/95 border border-slate-700 px-2.5 py-1.5 rounded shadow-xl text-xs backdrop-blur-xs font-mono"
+          className="fixed pointer-events-none z-50 bg-[#16181d] border border-[#2b2e38] px-2.5 py-1.5 rounded-md shadow-2xl text-xs font-mono"
           style={{ left: hoverTooltip.x + 12, top: hoverTooltip.y }}
         >
-          <div className="font-semibold text-slate-100">{hoverTooltip.text}</div>
+          <div className="font-semibold text-[#f0f2f6]">{hoverTooltip.text}</div>
           {hoverTooltip.subtext && (
-            <div className="text-[11px] text-slate-400">{hoverTooltip.subtext}</div>
+            <div className="text-[11px] text-[#8b909f]">{hoverTooltip.subtext}</div>
           )}
         </div>
       )}
 
       {/* Canvas Controls Overlay (Bottom-Right of Canvas, desktop only as mobile pinches to zoom) */}
-      <div className="hidden md:flex absolute bottom-3 right-3 items-center gap-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded-lg backdrop-blur-md shadow-lg text-slate-400 text-xs">
+      <div className="hidden md:flex absolute bottom-3 right-3 items-center gap-1.5 bg-[#15171b] border border-[#252831] p-1 rounded-md shadow-2xl text-[#cfd3dd] text-xs">
         <button
           onClick={() => setZoom((z) => Math.min(z * 1.2, 2.5))}
           title="Zoom In"
-          className="w-7 h-7 flex items-center justify-center hover:bg-slate-800 hover:text-white rounded transition-colors font-bold"
+          className="w-7 h-7 flex items-center justify-center hover:bg-[#22252e] hover:text-white rounded-md transition-colors font-bold cursor-pointer"
         >
           +
         </button>
-        <span className="font-mono text-[11px] px-1 text-slate-300">
+        <span className="font-mono text-[11px] px-1 text-[#8b909f]">
           {Math.round(zoom * 100)}%
         </span>
         <button
           onClick={() => setZoom((z) => Math.max(z / 1.2, 0.4))}
           title="Zoom Out"
-          className="w-7 h-7 flex items-center justify-center hover:bg-slate-800 hover:text-white rounded transition-colors font-bold"
+          className="w-7 h-7 flex items-center justify-center hover:bg-[#22252e] hover:text-white rounded-md transition-colors font-bold cursor-pointer"
         >
           −
         </button>
-        <div className="h-4 w-px bg-slate-800 mx-0.5" />
+        <div className="h-4 w-px bg-[#262832] mx-0.5" />
         <button
           onClick={() => {
             setPan({ x: 0, y: 0 });
             setZoom(1.0);
           }}
           title="Reset View"
-          className="px-2 h-7 flex items-center justify-center hover:bg-slate-800 hover:text-white rounded transition-colors text-[11px]"
+          className="px-2 h-7 flex items-center justify-center hover:bg-[#22252e] hover:text-white rounded-md transition-colors text-[11px] cursor-pointer"
         >
           Reset View
         </button>

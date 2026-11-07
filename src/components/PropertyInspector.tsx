@@ -41,28 +41,28 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
   if (!selectedComponent && !selectedWire) return null;
 
   const bodyContent = (
-    <div className="flex flex-col h-full bg-slate-950 text-xs text-slate-300 select-none">
+    <div className="flex flex-col h-full bg-[#15171b] text-xs text-[#cfd3dd] select-none">
       {/* Mobile Grab Handle */}
-      <div className="w-12 h-1 bg-slate-700 rounded-full mx-auto mt-2 mb-1 md:hidden" />
+      <div className="w-10 h-1 bg-[#323642] rounded-full mx-auto mt-2 mb-1 md:hidden" />
 
       {/* Header */}
-      <div className="p-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/60">
+      <div className="p-3 border-b border-[#252831] flex items-center justify-between bg-[#17191e]">
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-sky-500/20 text-sky-400">
+          <div className="p-1 rounded-md bg-[#22252e] border border-[#2d313b] text-[#cfd3dd]">
             {selectedComponent ? <Layers className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
           </div>
           <div>
-            <div className="font-bold text-slate-100">
+            <div className="font-semibold text-[#f0f2f6]">
               {selectedComponent ? selectedComponent.name : 'Wire Segment'}
             </div>
-            <div className="text-[10px] text-slate-400 font-mono">
+            <div className="text-[10px] text-[#717684] font-mono">
               {selectedComponent ? selectedComponent.id : selectedWire?.id}
             </div>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+          className="text-[#717684] hover:text-white p-1 rounded-md hover:bg-[#252831] transition-colors cursor-pointer"
         >
           ✕
         </button>
@@ -71,26 +71,26 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
         {/* Component Live Telemetry Readings */}
         {selectedComponent && selectedComponent.state && (
-          <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+          <div className="p-2.5 rounded-lg bg-[#1a1c22] border border-[#262832] space-y-2">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#717684] block">
               Live Readings
             </span>
             <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-              <div className="bg-slate-950/80 p-1.5 rounded border border-slate-800/80">
-                <span className="text-slate-400 text-[10px] block">Voltage Drop</span>
-                <span className="text-sky-300 font-bold">
+              <div className="bg-[#121317] p-2 rounded-md border border-[#22242e]">
+                <span className="text-[#717684] text-[10px] block">Voltage Drop</span>
+                <span className="text-[#38bdf8] font-bold">
                   {formatVoltage(selectedComponent.state.voltageDrop ?? 0)}
                 </span>
               </div>
-              <div className="bg-slate-950/80 p-1.5 rounded border border-slate-800/80">
-                <span className="text-slate-400 text-[10px] block">Current</span>
-                <span className="text-emerald-300 font-bold">
+              <div className="bg-[#121317] p-2 rounded-md border border-[#22242e]">
+                <span className="text-[#717684] text-[10px] block">Current</span>
+                <span className="text-[#34d399] font-bold">
                   {formatCurrent(selectedComponent.state.current ?? 0)}
                 </span>
               </div>
-              <div className="bg-slate-950/80 p-1.5 rounded border border-slate-800/80 col-span-2 flex items-center justify-between">
-                <span className="text-slate-400 text-[10px]">Power Dissipated:</span>
-                <span className="text-amber-300 font-bold">
+              <div className="bg-[#121317] p-2 rounded-md border border-[#22242e] col-span-2 flex items-center justify-between">
+                <span className="text-[#717684] text-[10px]">Power Dissipated:</span>
+                <span className="text-[#fbbf24] font-bold">
                   {((selectedComponent.state.power ?? 0) * 1000).toFixed(2)} mW
                 </span>
               </div>
@@ -464,14 +464,14 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => onRotateComponent(selectedComponent.id)}
-                className="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-lg text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="py-2 px-2 bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] rounded-lg text-[#cfd3dd] border border-[#2d313b] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <RotateCw className="w-4 h-4" />
                 <span>Rotate [R]</span>
               </button>
               <button
                 onClick={() => onDuplicateComponent(selectedComponent)}
-                className="py-2 px-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 rounded-lg text-slate-200 border border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                className="py-2 px-2 bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] rounded-lg text-[#cfd3dd] border border-[#2d313b] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Copy className="w-4 h-4" />
                 <span>Duplicate</span>
@@ -481,7 +481,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
 
           <button
             onClick={onDeleteSelected}
-            className="w-full py-2 px-2 bg-rose-950/50 hover:bg-rose-900/70 active:bg-rose-900 text-rose-300 rounded-lg border border-rose-800/60 flex items-center justify-center gap-1.5 transition-colors cursor-pointer font-semibold"
+            className="w-full py-2 px-2 bg-[#2a1b1f] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] rounded-lg border border-[#4a2228] flex items-center justify-center gap-1.5 transition-colors cursor-pointer font-semibold"
           >
             <Trash2 className="w-4 h-4" />
             <span>Delete Selected</span>
@@ -494,7 +494,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden md:flex w-72 border-l border-slate-800 bg-slate-950 flex-col select-none shrink-0">
+      <aside className="hidden md:flex w-72 border-l border-[#252831] bg-[#15171b] flex-col select-none shrink-0">
         {bodyContent}
       </aside>
 
@@ -502,10 +502,10 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
       {isMobileOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex flex-col justify-end">
           <div
-            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs animate-in fade-in"
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs animate-in fade-in"
             onClick={onClose}
           />
-          <div className="relative w-full max-h-[80vh] bg-slate-950 border-t border-slate-700 rounded-t-2xl shadow-2xl z-10 animate-in slide-in-from-bottom duration-200 flex flex-col overflow-hidden pb-safe">
+          <div className="relative w-full max-h-[80vh] bg-[#15171b] border-t border-[#2d313b] rounded-t-2xl shadow-2xl z-10 animate-in slide-in-from-bottom duration-200 flex flex-col overflow-hidden pb-safe">
             {bodyContent}
           </div>
         </div>

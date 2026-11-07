@@ -71,17 +71,17 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   });
 
   const content = (
-    <div className="flex flex-col h-full bg-zinc-950 text-zinc-200 select-none border-r border-zinc-800/80">
+    <div className="flex flex-col h-full bg-[#15171b] text-[#eceff4] select-none border-r border-[#252831]">
       {/* Header */}
-      <div className="p-3 border-b border-zinc-800/80">
+      <div className="p-3 border-b border-[#252831]">
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-            Components
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-[#717684]">
+            Components Library
           </div>
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}
-              className="p-1 rounded text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 md:hidden cursor-pointer"
+              className="p-1 rounded-md text-[#8b909f] hover:text-white hover:bg-[#252831] md:hidden cursor-pointer"
               title="Close Panel"
             >
               <X className="w-4 h-4" />
@@ -91,13 +91,13 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
 
         {/* Search */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-zinc-500 pointer-events-none" />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#5e6371] pointer-events-none" />
           <input
             type="text"
-            placeholder="Search library (resistor, diode...)"
+            placeholder="Search parts (resistor, diode, opamp...)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded pl-8 pr-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-500 transition-colors"
+            className="w-full bg-[#1c1e24] border border-[#2b2e37] rounded-md pl-8 pr-2.5 py-1.5 text-xs text-[#eceff4] placeholder-[#5e6371] focus:outline-none focus:border-[#4a4f5f] transition-colors"
           />
         </div>
 
@@ -114,10 +114,10 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-2 py-1 rounded text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
+              className={`px-2 py-1 rounded-md text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
                 activeCategory === cat.id
-                  ? 'bg-zinc-800 text-zinc-100 font-medium'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+                  ? 'bg-[#282b34] text-white font-medium border border-[#3b3f4d]'
+                  : 'text-[#8b909f] hover:text-[#dce0e8] hover:bg-[#1f2128]'
               }`}
             >
               {cat.label}
@@ -137,28 +137,28 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
                 onCloseMobile();
               }
             }}
-            className="w-full text-left p-2 rounded bg-zinc-900/40 hover:bg-zinc-900 active:bg-zinc-850 border border-zinc-850 hover:border-zinc-700 transition-colors flex items-center justify-between group cursor-pointer"
+            className="w-full text-left p-2 rounded-md bg-[#1a1c22] hover:bg-[#22252e] active:bg-[#16181e] border border-[#262832] hover:border-[#383c4a] transition-all flex items-center justify-between group cursor-pointer"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               {/* Standard Schematic Symbol Icon */}
-              <div className="w-8 h-8 rounded bg-zinc-950 border border-zinc-800/80 flex items-center justify-center shrink-0 text-zinc-400 group-hover:text-zinc-100 transition-colors">
+              <div className="w-8 h-8 rounded-md bg-[#121317] border border-[#242630] flex items-center justify-center shrink-0 text-[#9ca1af] group-hover:text-white transition-colors">
                 <StandardSymbolIcon type={item.type} className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-medium text-zinc-200 group-hover:text-white transition-colors truncate">
+                <div className="text-xs font-medium text-[#dce0e8] group-hover:text-white transition-colors truncate">
                   {item.label}
                 </div>
-                <div className="text-[10px] text-zinc-500 truncate">{item.hint}</div>
+                <div className="text-[10px] text-[#717684] truncate">{item.hint}</div>
               </div>
             </div>
-            <span className="text-[10px] font-mono text-zinc-500 group-hover:text-zinc-300 shrink-0 ml-2">
+            <span className="text-[11px] font-mono text-[#5e6371] group-hover:text-[#a0a5b4] shrink-0 ml-2">
               +
             </span>
           </button>
         ))}
 
         {filteredItems.length === 0 && (
-          <div className="text-center py-8 text-xs text-zinc-500">
+          <div className="text-center py-8 text-xs text-[#717684]">
             No components match &quot;{search}&quot;
           </div>
         )}
@@ -169,7 +169,7 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
   return (
     <>
       {/* Desktop Permanent Sidebar */}
-      <aside className="hidden md:flex w-64 bg-zinc-950 flex-col select-none shrink-0">
+      <aside className="hidden md:flex w-64 bg-[#15171b] flex-col select-none shrink-0">
         {content}
       </aside>
 
@@ -177,10 +177,10 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
       {isOpenMobile && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs animate-in fade-in"
+            className="fixed inset-0 bg-black/75 backdrop-blur-xs animate-in fade-in"
             onClick={onCloseMobile}
           />
-          <div className="relative w-80 max-w-[85vw] h-full bg-zinc-950 shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+          <div className="relative w-80 max-w-[85vw] h-full bg-[#15171b] shadow-2xl z-10 animate-in slide-in-from-left duration-200">
             {content}
           </div>
         </div>

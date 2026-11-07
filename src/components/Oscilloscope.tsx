@@ -419,16 +419,16 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     return (
       <div
         onClick={onToggleMinimize}
-        className="h-10 px-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300 cursor-pointer hover:bg-slate-900 transition-colors select-none z-20 shrink-0"
+        className="h-10 px-3 bg-[#15171b] border-t border-[#252831] flex items-center justify-between text-xs text-[#cfd3dd] cursor-pointer hover:bg-[#1a1c22] transition-colors select-none z-20 shrink-0"
       >
         <div className="flex items-center gap-2 overflow-hidden">
-          <Activity className="w-4 h-4 text-sky-400 shrink-0" />
-          <span className="font-bold text-slate-200 text-xs shrink-0">OSCILLOSCOPE</span>
+          <Activity className="w-4 h-4 text-[#38bdf8] shrink-0" />
+          <span className="font-semibold text-[#f0f2f6] text-xs shrink-0 tracking-wider">OSCILLOSCOPE</span>
           <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
             {channels.filter((c) => c.enabled && c.pinId).map((c) => (
               <span
                 key={c.id}
-                className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 shrink-0"
+                className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md bg-[#1c1e24] border border-[#2a2d36] shrink-0"
                 style={{ color: c.color }}
               >
                 {c.name}: {formatVoltage(measurements.vpp)}
@@ -442,7 +442,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
             e.stopPropagation();
             onToggleMinimize?.();
           }}
-          className="flex items-center gap-1 text-[11px] text-sky-400 font-bold bg-sky-500/10 hover:bg-sky-500/20 px-2 py-1 rounded border border-sky-500/30 shrink-0"
+          className="flex items-center gap-1 text-[11px] text-[#38bdf8] font-medium bg-[#1e2530] hover:bg-[#25303e] px-2.5 py-1 rounded-md border border-[#2d3a4d] shrink-0 cursor-pointer"
         >
           <span>Open</span>
           <ChevronUp className="w-3.5 h-3.5" />
@@ -453,38 +453,38 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
 
   return (
     <div
-      className={`border-t border-slate-800 bg-slate-950/95 backdrop-blur-md flex flex-col transition-all duration-200 select-none z-20 shrink-0 ${
+      className={`border-t border-[#252831] bg-[#131519] flex flex-col transition-all duration-200 select-none z-20 shrink-0 ${
         isExpanded ? 'h-[380px] md:h-[440px]' : 'h-[240px] md:h-[260px]'
       }`}
     >
       {/* Top Header Controls Bar */}
-      <div className="h-10 px-2 md:px-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-300 shrink-0">
+      <div className="h-10 px-2 md:px-3 bg-[#16181d] border-b border-[#252831] flex items-center justify-between text-xs text-[#cfd3dd] shrink-0">
         <div className="flex items-center gap-1.5 md:gap-2">
           {/* Minimize button */}
           {onToggleMinimize && (
             <button
               onClick={onToggleMinimize}
               title="Minimize Oscilloscope"
-              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 cursor-pointer"
+              className="p-1 rounded-md hover:bg-[#22252e] text-[#8b909f] hover:text-[#dce0e8] cursor-pointer"
             >
               <ChevronDown className="w-4 h-4" />
             </button>
           )}
 
-          <div className="flex items-center gap-1 font-bold text-sky-400">
+          <div className="flex items-center gap-1 font-semibold text-[#38bdf8]">
             <Activity className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">OSCILLOSCOPE</span>
+            <span className="hidden sm:inline tracking-wider">OSCILLOSCOPE</span>
           </div>
 
-          <div className="h-4 w-px bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-[#262832] mx-0.5" />
 
           {/* Run/Pause Button */}
           <button
             onClick={onTogglePause}
-            className={`px-2 py-0.5 rounded flex items-center gap-1 font-semibold text-[11px] transition-colors cursor-pointer ${
+            className={`px-2 py-0.5 rounded-md flex items-center gap-1 font-medium text-[11px] transition-colors cursor-pointer border ${
               isPaused
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
-                : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                ? 'bg-[#241f17] text-[#fbbf24] border-[#d97706]/40 hover:bg-[#2c2419]'
+                : 'bg-[#17231c] text-[#34d399] border-[#059669]/40 hover:bg-[#1d2d23]'
             }`}
           >
             {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
@@ -494,26 +494,26 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           <button
             onClick={onClearSamples}
             title="Clear buffer"
-            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            className="p-1 rounded-md hover:bg-[#22252e] text-[#8b909f] hover:text-[#dce0e8] transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* Mobile View Toggle (Screen vs Knobs) */}
-        <div className="flex md:hidden bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px]">
+        <div className="flex md:hidden bg-[#121317] p-0.5 rounded-md border border-[#252831] text-[11px]">
           <button
             onClick={() => setMobileTab('screen')}
-            className={`px-2 py-0.5 rounded font-bold transition-colors ${
-              mobileTab === 'screen' ? 'bg-sky-500 text-slate-950' : 'text-slate-400'
+            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+              mobileTab === 'screen' ? 'bg-[#242730] text-white border border-[#363a46]' : 'text-[#8b909f]'
             }`}
           >
             Waveform
           </button>
           <button
             onClick={() => setMobileTab('knobs')}
-            className={`px-2 py-0.5 rounded font-bold transition-colors ${
-              mobileTab === 'knobs' ? 'bg-sky-500 text-slate-950' : 'text-slate-400'
+            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+              mobileTab === 'knobs' ? 'bg-[#242730] text-white border border-[#363a46]' : 'text-[#8b909f]'
             }`}
           >
             Controls
@@ -530,20 +530,20 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
               <div
                 key={ch.id}
                 onClick={() => setSelectedChannelId(ch.id)}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer border text-[10px] transition-all shrink-0 ${
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md cursor-pointer border text-[10px] transition-all shrink-0 ${
                   isSelected
-                    ? 'border-sky-500 bg-sky-500/10 shadow-xs'
-                    : 'border-slate-800 bg-slate-900/60 hover:border-slate-700'
+                    ? 'border-[#38bdf8] bg-[#1a2530] shadow-xs'
+                    : 'border-[#262832] bg-[#1a1c22] hover:border-[#383c4a]'
                 }`}
               >
                 <div
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: ch.enabled ? ch.color : '#475569' }}
                 />
-                <span className="font-bold" style={{ color: ch.enabled ? ch.color : '#94a3b8' }}>
+                <span className="font-semibold" style={{ color: ch.enabled ? ch.color : '#8b909f' }}>
                   {ch.name}
                 </span>
-                <span className="text-[9px] text-slate-400 max-w-[60px] truncate hidden md:inline">
+                <span className="text-[9px] text-[#717684] max-w-[60px] truncate hidden md:inline">
                   {probeInfo ? `${probeInfo.compName}.${probeInfo.pinName}` : 'Unattached'}
                 </span>
               </div>

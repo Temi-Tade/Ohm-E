@@ -518,7 +518,7 @@ export default function App() {
   const selectedWire = wires.find((w) => w.id === selectedWireId) || null;
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#090d16] text-zinc-100 font-sans">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#101114] text-[#eceff4] font-sans">
       {/* Top Application Toolbar */}
       <Toolbar
         isRunning={isRunning}
@@ -599,10 +599,10 @@ export default function App() {
 
           {/* Mobile Floating Action Toolbar for Selected Component */}
           {selectedComp && (
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-1.5 bg-zinc-900 border border-zinc-750 p-1.5 px-2 rounded-lg shadow-xl text-xs text-zinc-200">
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-1.5 bg-[#17191e] border border-[#2d313b] p-1.5 px-2 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]">
               <button
                 onClick={() => handleRotateComponent(selectedComp.id)}
-                className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-650 text-zinc-200 font-medium flex items-center gap-1 cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] border border-[#2e323c] text-[#e4e7ee] font-medium flex items-center gap-1.5 min-h-[40px] cursor-pointer"
                 title="Rotate Component"
               >
                 <RotateCw className="w-3.5 h-3.5" />
@@ -610,7 +610,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => setIsMobileInspectorOpen(true)}
-                className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-650 text-zinc-200 font-medium flex items-center gap-1 cursor-pointer"
+                className="px-3 py-2 rounded-lg bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] border border-[#2e323c] text-[#e4e7ee] font-medium flex items-center gap-1.5 min-h-[40px] cursor-pointer"
                 title="Edit Component Parameters"
               >
                 <Sliders className="w-3.5 h-3.5" />
@@ -618,14 +618,14 @@ export default function App() {
               </button>
               <button
                 onClick={() => handleDuplicateComponent(selectedComp)}
-                className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-650 text-zinc-200 cursor-pointer"
+                className="p-2 rounded-lg bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] border border-[#2e323c] text-[#e4e7ee] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Duplicate Component"
               >
                 <Copy className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={handleDeleteSelected}
-                className="p-1.5 rounded bg-rose-950/60 hover:bg-rose-900 active:bg-rose-800 text-rose-300 border border-rose-800/40 cursor-pointer"
+                className="p-2 rounded-lg bg-[#2a1b1e] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] border border-[#4a242a] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Delete Component"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -635,7 +635,7 @@ export default function App() {
                   setSelectedComponentId(null);
                   setIsMobileInspectorOpen(false);
                 }}
-                className="p-1.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-400 cursor-pointer"
+                className="p-2 rounded-lg bg-[#22252c] hover:bg-[#2b2e37] text-[#9ca3af] border border-[#2e323c] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Deselect"
               >
                 <X className="w-3.5 h-3.5" />
@@ -645,18 +645,18 @@ export default function App() {
 
           {/* Mobile Floating Action Toolbar for Selected Wire */}
           {selectedWire && !selectedComp && (
-            <div className="absolute bottom-12 left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-2 bg-zinc-900 border border-zinc-750 p-1.5 px-3 rounded-lg shadow-xl text-xs text-zinc-200">
-              <span className="text-zinc-400 font-mono text-[11px]">Wire</span>
+            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-2 bg-[#17191e] border border-[#2d313b] p-1.5 px-3 rounded-xl shadow-2xl text-xs text-[#e4e7ee]">
+              <span className="text-[#8b909e] font-mono text-[11px]">Wire</span>
               <button
                 onClick={() => setIsMobileInspectorOpen(true)}
-                className="px-2 py-1 rounded bg-zinc-800 text-zinc-200 hover:bg-zinc-750 flex items-center gap-1"
+                className="px-3 py-2 rounded-lg bg-[#22252c] text-[#e4e7ee] hover:bg-[#2b2e37] border border-[#2e323c] flex items-center gap-1.5 min-h-[40px] cursor-pointer"
               >
-                <Sliders className="w-3 h-3" />
+                <Sliders className="w-3.5 h-3.5" />
                 <span>Info</span>
               </button>
               <button
                 onClick={handleDeleteSelected}
-                className="p-1 rounded bg-rose-950/60 text-rose-300 hover:bg-rose-900"
+                className="p-2 rounded-lg bg-[#2a1b1e] text-[#f87171] hover:bg-[#382025] border border-[#4a242a] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Delete Wire"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -666,7 +666,7 @@ export default function App() {
                   setSelectedWireId(null);
                   setIsMobileInspectorOpen(false);
                 }}
-                className="p-1 rounded text-zinc-400 hover:text-white"
+                className="p-2 rounded-lg text-[#9ca3af] hover:text-white min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Deselect"
               >
                 <X className="w-3.5 h-3.5" />
@@ -678,7 +678,7 @@ export default function App() {
           {!selectedComp && !selectedWire && !isMobilePaletteOpen && (
             <button
               onClick={() => setIsMobilePaletteOpen(true)}
-              className="md:hidden absolute bottom-12 right-4 z-30 w-11 h-11 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-200 hover:bg-zinc-750 active:scale-95 shadow-lg flex items-center justify-center font-bold text-2xl transition-all cursor-pointer"
+              className="md:hidden absolute bottom-20 right-4 z-30 w-12 h-12 rounded-xl bg-[#20232a] hover:bg-[#282c35] active:bg-[#181a1f] border border-[#323742] text-[#f3f4f6] active:scale-95 shadow-2xl flex items-center justify-center font-bold text-2xl transition-all cursor-pointer"
               title="Add Component"
             >
               +
