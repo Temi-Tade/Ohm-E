@@ -119,13 +119,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <FastForward className="w-3.5 h-3.5" />
         </button>
 
-        {/* Reset */}
+        {/* Restart / Reset Simulation */}
         <button
           onClick={onReset}
-          title="Reset circuit time and states"
-          className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] transition-colors cursor-pointer"
+          title="Restart simulation from t=0"
+          className="px-2.5 py-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] active:bg-[#181a20] text-[#cfd3dd] flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
+          <RotateCcw className="w-3.5 h-3.5 text-[#38bdf8]" />
+          <span>Restart</span>
         </button>
 
         <div className="h-4 w-px bg-[#262832] mx-1" />
@@ -236,6 +237,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         >
           {isRunning ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
           <span className="hidden sm:inline">{isRunning ? 'Pause' : 'Run'}</span>
+        </button>
+
+        {/* Mobile Restart Simulation */}
+        <button
+          onClick={onReset}
+          className="lg:hidden p-1.5 sm:px-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] active:bg-[#181a20] flex items-center gap-1 cursor-pointer"
+          title="Restart simulation from t=0"
+        >
+          <RotateCcw className="w-3.5 h-3.5 text-[#38bdf8]" />
+          <span className="hidden sm:inline text-xs">Restart</span>
         </button>
 
         {/* Example Circuits Dropdown */}

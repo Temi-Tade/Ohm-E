@@ -15,6 +15,8 @@ export interface CircuitPreset {
   wires: Wire[];
   defaultScopeChannels?: {
     timebase?: number;
+    channel1?: { pinId: string; enabled?: boolean; voltsPerDiv?: number; offsetY?: number };
+    channel2?: { pinId: string; enabled?: boolean; voltsPerDiv?: number; offsetY?: number };
   };
 }
 
@@ -143,7 +145,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       components: [rcSource, rcResistor, rcCapacitor, rcGround1, rcGround2],
       wires: rcWires,
       defaultScopeChannels: {
-        timebase: 0.002, // 2ms/div
+        timebase: 0.002, // 2ms/div (total span 20ms = 2 full cycles of 100Hz)
+        channel1: { pinId: rcSource.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
+        channel2: { pinId: rcCapacitor.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
       },
     },
     {
@@ -154,7 +158,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       components: [rlcClock, rlcResistor, rlcInductor, rlcCapacitor, rlcGnd1, rlcGnd2],
       wires: rlcWires,
       defaultScopeChannels: {
-        timebase: 0.001,
+        timebase: 0.001, // 1ms/div
+        channel1: { pinId: rlcClock.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
+        channel2: { pinId: rlcCapacitor.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
       },
     },
     {
@@ -166,6 +172,8 @@ export function getPresetCircuits(): CircuitPreset[] {
       wires: ledWires,
       defaultScopeChannels: {
         timebase: 0.01,
+        channel1: { pinId: ledSwitch.pins[1].id, enabled: true, voltsPerDiv: 5.0 },
+        channel2: { pinId: ledComp.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
       },
     },
     {
@@ -176,7 +184,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       components: [potSource, potComp, potVoltmeter, potGnd1, potGnd2, potGnd3],
       wires: potWires,
       defaultScopeChannels: {
-        timebase: 0.05,
+        timebase: 0.02,
+        channel1: { pinId: potSource.pins[0].id, enabled: true, voltsPerDiv: 5.0 },
+        channel2: { pinId: potComp.pins[2].id, enabled: true, voltsPerDiv: 5.0 },
       },
     },
     {
@@ -188,6 +198,8 @@ export function getPresetCircuits(): CircuitPreset[] {
       wires: brWires,
       defaultScopeChannels: {
         timebase: 0.005,
+        channel1: { pinId: brSource.pins[0].id, enabled: true, voltsPerDiv: 5.0 },
+        channel2: { pinId: brCap.pins[0].id, enabled: true, voltsPerDiv: 5.0 },
       },
     },
     {
@@ -198,7 +210,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       components: [bjtVcc, bjtClock, bjtRb, bjtNpn, bjtRc, bjtLed, bjtGnd1, bjtGnd2],
       wires: bjtWires,
       defaultScopeChannels: {
-        timebase: 0.2,
+        timebase: 0.1,
+        channel1: { pinId: bjtClock.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
+        channel2: { pinId: bjtNpn.pins[1].id, enabled: true, voltsPerDiv: 5.0 },
       },
     },
   ];

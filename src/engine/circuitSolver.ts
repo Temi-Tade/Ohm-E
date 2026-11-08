@@ -475,27 +475,35 @@ export class CircuitSimulator {
             const ve = nodeVoltages[ne] ?? 0;
             const vbe = vb - ve;
             const vce = vc - ve;
-            const beta = comp.params.beta ?? 100;
+            const beta = Math.max(comp.params.beta ?? 100, 1);
 
-            // Base-Emitter diode
+            // Base-Emitter diode with series base resistance
             let gbe = 1e-6;
             let ib = 0;
-            if (vbe > 0.65) {
-              const rbe = 25;
+            if (vbe > 0.55) {
+              const rbe = 25 + 50 / beta;
               gbe = 1 / rbe;
-              ib = (vbe - 0.65) / rbe;
+              ib = Math.max(0, (vbe - 0.65) / rbe);
             }
             stampConductance(nb, ne, gbe);
             stampCurrentSource(nb, ne, ib - gbe * vbe);
 
-            // Collector current Ic = beta * Ib (active) or saturated if Vce < 0.2V
-            if (ib > 0 && vce > 0.05) {
-              let ic = ib * beta;
-              // saturation clamp
+            // Collector-Emitter channel: dynamic conductance stamped in matrix A
+            // This prevents unbuffered current source oscillations
+            if (ib > 0 && vce > 0) {
+              let icTarget = ib * beta;
               if (vce < 0.2) {
-                ic = ic * Math.max(vce / 0.2, 0);
+                // Saturated: small saturation resistance (2 ohms)
+                const gsat = 0.5;
+                stampConductance(nc, ne, gsat);
+              } else {
+                // Active mode: dynamic conductance Gce = Ic / Vce
+                const gce = Math.min(Math.max(icTarget / Math.max(vce, 0.2), 1e-6), 2.0);
+                stampConductance(nc, ne, gce);
               }
-              stampCurrentSource(nc, ne, ic);
+            } else {
+              // Off / cutoff: high leakage resistance
+              stampConductance(nc, ne, 1e-7);
             }
           }
         } else if (comp.type === 'pnp') {
@@ -511,24 +519,99 @@ export class CircuitSimulator {
             const ve = nodeVoltages[ne] ?? 0;
             const veb = ve - vb;
             const vec = ve - vc;
-            const beta = comp.params.beta ?? 100;
+            const beta = Math.max(comp.params.beta ?? 100, 1);
 
             let geb = 1e-6;
             let ib = 0;
-            if (veb > 0.65) {
-              const reb = 25;
+            if (veb > 0.55) {
+              const reb = 25 + 50 / beta;
               geb = 1 / reb;
-              ib = (veb - 0.65) / reb;
+              ib = Math.max(0, (veb - 0.65) / reb);
             }
             stampConductance(ne, nb, geb);
-            stampCurrentSource(nb, ne, ib - geb * veb);
+            stampCurrentSource(ne, nb, ib - geb * veb);
 
-            if (ib > 0 && vec > 0.05) {
-              let ic = ib * beta;
+            if (ib > 0 && vec > 0) {
+              let icTarget = ib * beta;
               if (vec < 0.2) {
-                ic = ic * Math.max(vec / 0.2, 0);
+                const gsat = 0.5;
+                stampConductance(ne, nc, gsat);
+              } else {
+                const gec = Math.min(Math.max(icTarget / Math.max(vec, 0.2), 1e-6), 2.0);
+                stampConductance(ne, nc, gec);
               }
-              stampCurrentSource(ne, nc, ic);
+            } else {
+              stampConductance(ne, nc, 1e-7);
+            }
+          }
+        } else if (comp.type === 'n_mosfet') {
+          const gPin = comp.pins.find(p => p.name === 'Gate');
+          const dPin = comp.pins.find(p => p.name === 'Drain');
+          const sPin = comp.pins.find(p => p.name === 'Source');
+          if (gPin && dPin && sPin) {
+            const ng = topology.pinToNode.get(gPin.id) ?? 0;
+            const nd = topology.pinToNode.get(dPin.id) ?? 0;
+            const ns = topology.pinToNode.get(sPin.id) ?? 0;
+            const vg = nodeVoltages[ng] ?? 0;
+            const vd = nodeVoltages[nd] ?? 0;
+            const vs = nodeVoltages[ns] ?? 0;
+            const vgs = vg - vs;
+            const vds = vd - vs;
+            const vth = comp.params.vth ?? 2.0;
+            const K = Math.max(comp.params.transconductance ?? 0.05, 1e-4);
+            const rdsOn = Math.max(comp.params.rdsOn ?? 0.2, 0.01);
+
+            // Gate input has virtually infinite impedance
+            stampConductance(ng, ns, 1e-9);
+
+            if (vgs > vth && vds > 0) {
+              const vov = vgs - vth; // overdrive
+              if (vds < vov) {
+                // Ohmic / Triode region: linear resistance Rdson
+                const ron = Math.max(rdsOn, 1 / (K * Math.max(vov, 0.05)));
+                stampConductance(nd, ns, 1 / ron);
+              } else {
+                // Saturation region: Id = 0.5 * K * Vov^2
+                const idSat = 0.5 * K * vov * vov;
+                const gds = Math.min(Math.max(idSat / Math.max(vds, 0.1), 1 / 1e4), 1 / rdsOn);
+                stampConductance(nd, ns, gds);
+              }
+            } else {
+              // Cutoff / off state
+              stampConductance(nd, ns, 1e-7);
+            }
+          }
+        } else if (comp.type === 'p_mosfet') {
+          const gPin = comp.pins.find(p => p.name === 'Gate');
+          const dPin = comp.pins.find(p => p.name === 'Drain');
+          const sPin = comp.pins.find(p => p.name === 'Source');
+          if (gPin && dPin && sPin) {
+            const ng = topology.pinToNode.get(gPin.id) ?? 0;
+            const nd = topology.pinToNode.get(dPin.id) ?? 0;
+            const ns = topology.pinToNode.get(sPin.id) ?? 0;
+            const vg = nodeVoltages[ng] ?? 0;
+            const vd = nodeVoltages[nd] ?? 0;
+            const vs = nodeVoltages[ns] ?? 0;
+            const vsg = vs - vg;
+            const vsd = vs - vd;
+            const vthMag = Math.abs(comp.params.vth ?? -2.0);
+            const K = Math.max(comp.params.transconductance ?? 0.05, 1e-4);
+            const rdsOn = Math.max(comp.params.rdsOn ?? 0.2, 0.01);
+
+            stampConductance(ng, ns, 1e-9);
+
+            if (vsg > vthMag && vsd > 0) {
+              const vov = vsg - vthMag;
+              if (vsd < vov) {
+                const ron = Math.max(rdsOn, 1 / (K * Math.max(vov, 0.05)));
+                stampConductance(ns, nd, 1 / ron);
+              } else {
+                const idSat = 0.5 * K * vov * vov;
+                const gsd = Math.min(Math.max(idSat / Math.max(vsd, 0.1), 1 / 1e4), 1 / rdsOn);
+                stampConductance(ns, nd, gsd);
+              }
+            } else {
+              stampConductance(ns, nd, 1e-7);
             }
           }
         }
@@ -562,10 +645,18 @@ export class CircuitSimulator {
       // Solve linear system
       const solution = solveLinearSystem(A, b);
       if (solution) {
-        // Update nodeVoltages: node 0 is 0V
-        nodeVoltages = [0];
+        const nextVoltages = [0];
         for (let i = 0; i < numNodeUnknowns; i++) {
-          nodeVoltages.push(solution[i]);
+          nextVoltages.push(solution[i]);
+        }
+        if (iter === 0) {
+          nodeVoltages = nextVoltages;
+        } else {
+          // Damped relaxation to guarantee smooth non-linear convergence
+          const damping = 0.6;
+          for (let i = 1; i <= numNodeUnknowns; i++) {
+            nodeVoltages[i] = (1 - damping) * nodeVoltages[i] + damping * nextVoltages[i];
+          }
         }
       }
     }
@@ -587,7 +678,7 @@ export class CircuitSimulator {
       if (comp.pins.length >= 2) {
         const v1 = pinVoltages.get(comp.pins[0].id) ?? 0;
         const v2 = pinVoltages.get(comp.pins[1].id) ?? 0;
-        const vDrop = v1 - v2;
+        let vDrop = v1 - v2;
         componentVoltageDrops.set(comp.id, vDrop);
 
         let current = 0;
@@ -640,12 +731,108 @@ export class CircuitSimulator {
               isBlown,
             };
           }
+        } else if (comp.type === 'npn') {
+          const bPin = comp.pins.find(p => p.name === 'Base');
+          const cPin = comp.pins.find(p => p.name === 'Collector');
+          const ePin = comp.pins.find(p => p.name === 'Emitter');
+          if (bPin && cPin && ePin) {
+            const vb = pinVoltages.get(bPin.id) ?? 0;
+            const vc = pinVoltages.get(cPin.id) ?? 0;
+            const ve = pinVoltages.get(ePin.id) ?? 0;
+            const vbe = vb - ve;
+            const vce = vc - ve;
+            const beta = Math.max(comp.params.beta ?? 100, 1);
+            const ib = vbe > 0.55 ? Math.max(0, (vbe - 0.65) / (25 + 50 / beta)) : 0;
+            const ic = vce > 0 ? (vce < 0.2 ? Math.max(0, vce * 0.5) : Math.min(ib * beta, vce / 1.5)) : 0;
+            current = ic;
+            vDrop = vce;
+            comp.state = {
+              voltageDrop: vDrop,
+              current: ic,
+              power: Math.abs(vce * ic),
+            };
+          }
+        } else if (comp.type === 'pnp') {
+          const bPin = comp.pins.find(p => p.name === 'Base');
+          const cPin = comp.pins.find(p => p.name === 'Collector');
+          const ePin = comp.pins.find(p => p.name === 'Emitter');
+          if (bPin && cPin && ePin) {
+            const vb = pinVoltages.get(bPin.id) ?? 0;
+            const vc = pinVoltages.get(cPin.id) ?? 0;
+            const ve = pinVoltages.get(ePin.id) ?? 0;
+            const veb = ve - vb;
+            const vec = ve - vc;
+            const beta = Math.max(comp.params.beta ?? 100, 1);
+            const ib = veb > 0.55 ? Math.max(0, (veb - 0.65) / (25 + 50 / beta)) : 0;
+            const ic = vec > 0 ? (vec < 0.2 ? Math.max(0, vec * 0.5) : Math.min(ib * beta, vec / 1.5)) : 0;
+            current = ic;
+            vDrop = vec;
+            comp.state = {
+              voltageDrop: vDrop,
+              current: ic,
+              power: Math.abs(vec * ic),
+            };
+          }
+        } else if (comp.type === 'n_mosfet') {
+          const gPin = comp.pins.find(p => p.name === 'Gate');
+          const dPin = comp.pins.find(p => p.name === 'Drain');
+          const sPin = comp.pins.find(p => p.name === 'Source');
+          if (gPin && dPin && sPin) {
+            const vg = pinVoltages.get(gPin.id) ?? 0;
+            const vd = pinVoltages.get(dPin.id) ?? 0;
+            const vs = pinVoltages.get(sPin.id) ?? 0;
+            const vgs = vg - vs;
+            const vds = vd - vs;
+            const vth = comp.params.vth ?? 2.0;
+            const K = Math.max(comp.params.transconductance ?? 0.05, 1e-4);
+            let id = 0;
+            if (vgs > vth && vds > 0) {
+              const vov = vgs - vth;
+              id = vds < vov ? K * (vov * vds - 0.5 * vds * vds) : 0.5 * K * vov * vov;
+            }
+            current = id;
+            vDrop = vds;
+            comp.state = {
+              voltageDrop: vDrop,
+              current: id,
+              power: Math.abs(vds * id),
+              vgs,
+              vds,
+            };
+          }
+        } else if (comp.type === 'p_mosfet') {
+          const gPin = comp.pins.find(p => p.name === 'Gate');
+          const dPin = comp.pins.find(p => p.name === 'Drain');
+          const sPin = comp.pins.find(p => p.name === 'Source');
+          if (gPin && dPin && sPin) {
+            const vg = pinVoltages.get(gPin.id) ?? 0;
+            const vd = pinVoltages.get(dPin.id) ?? 0;
+            const vs = pinVoltages.get(sPin.id) ?? 0;
+            const vsg = vs - vg;
+            const vsd = vs - vd;
+            const vthMag = Math.abs(comp.params.vth ?? -2.0);
+            const K = Math.max(comp.params.transconductance ?? 0.05, 1e-4);
+            let id = 0;
+            if (vsg > vthMag && vsd > 0) {
+              const vov = vsg - vthMag;
+              id = vsd < vov ? K * (vov * vsd - 0.5 * vsd * vsd) : 0.5 * K * vov * vov;
+            }
+            current = id;
+            vDrop = vsd;
+            comp.state = {
+              voltageDrop: vDrop,
+              current: id,
+              power: Math.abs(vsd * id),
+              vgs: -vsg,
+              vds: -vsd,
+            };
+          }
         } else if (comp.type === 'dc_source' || comp.type === 'ac_source' || comp.type === 'clock_source') {
           current = 0;
         }
 
         componentCurrents.set(comp.id, current);
-        if (comp.type !== 'led') {
+        if (comp.type !== 'led' && comp.type !== 'npn' && comp.type !== 'pnp' && comp.type !== 'n_mosfet' && comp.type !== 'p_mosfet') {
           comp.state = {
             voltageDrop: vDrop,
             current,

@@ -284,6 +284,48 @@ export function createComponent(
         },
       };
 
+    case 'n_mosfet':
+      return {
+        id,
+        type,
+        name: 'N-MOSFET',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_g`, name: 'Gate', label: 'G', x: -40, y: 0 },
+          { id: `${id}_d`, name: 'Drain', label: 'D', x: 20, y: -40 },
+          { id: `${id}_s`, name: 'Source', label: 'S', x: 20, y: 40 },
+        ],
+        params: {
+          vth: 2.0,
+          transconductance: 0.05,
+          rdsOn: 0.2,
+          ...customParams,
+        },
+      };
+
+    case 'p_mosfet':
+      return {
+        id,
+        type,
+        name: 'P-MOSFET',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_g`, name: 'Gate', label: 'G', x: -40, y: 0 },
+          { id: `${id}_s`, name: 'Source', label: 'S', x: 20, y: -40 },
+          { id: `${id}_d`, name: 'Drain', label: 'D', x: 20, y: 40 },
+        ],
+        params: {
+          vth: -2.0,
+          transconductance: 0.05,
+          rdsOn: 0.2,
+          ...customParams,
+        },
+      };
+
     case 'opamp':
       return {
         id,

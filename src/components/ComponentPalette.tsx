@@ -41,6 +41,8 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'led', label: 'Light Emitting Diode', category: 'semiconductors', hint: 'Luminescent indicator' },
   { type: 'npn', label: 'NPN BJT Transistor', category: 'semiconductors', hint: 'Bipolar current amplifier' },
   { type: 'pnp', label: 'PNP BJT Transistor', category: 'semiconductors', hint: 'Complementary bipolar transistor' },
+  { type: 'n_mosfet', label: 'N-Channel MOSFET', category: 'semiconductors', hint: 'Voltage-controlled N-FET' },
+  { type: 'p_mosfet', label: 'P-Channel MOSFET', category: 'semiconductors', hint: 'Voltage-controlled P-FET' },
 
   // Controls & Active
   { type: 'opamp', label: 'Operational Amplifier', category: 'controls', hint: 'High-gain differential op-amp' },

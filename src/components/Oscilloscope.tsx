@@ -85,6 +85,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
   onToggleMinimize,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'channels' | 'trigger' | 'cursors'>('channels');
   const [selectedChannelId, setSelectedChannelId] = useState<number>(0);
@@ -166,6 +167,43 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     };
   }, [samples, channels, selectedChannelId]);
 
+  // Auto-setup function (AUTOSET)
+  const handleAutoSet = () => {
+    const activeCh = channels[selectedChannelId];
+    if (!activeCh || !activeCh.pinId || samples.length < 5) return;
+
+    if (measurements.vpp > 0.05) {
+      // Find voltsPerDiv such that vpp fills ~4 divisions
+      const targetVdiv = measurements.vpp / 4;
+      let bestVdiv = VOLTS_PER_DIV_OPTIONS[0].val;
+      let minDiff = Math.abs(bestVdiv - targetVdiv);
+      for (const opt of VOLTS_PER_DIV_OPTIONS) {
+        const diff = Math.abs(opt.val - targetVdiv);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestVdiv = opt.val;
+        }
+      }
+      onUpdateChannel(selectedChannelId, { voltsPerDiv: bestVdiv, offsetY: 0 });
+    }
+
+    if (measurements.freq > 0.1) {
+      // Show ~2 cycles across 10 divisions
+      const period = 1 / measurements.freq;
+      const targetTimebase = (period * 2) / 10;
+      let bestTb = TIMEBASE_OPTIONS[0].val;
+      let minDiff = Math.abs(bestTb - targetTimebase);
+      for (const opt of TIMEBASE_OPTIONS) {
+        const diff = Math.abs(opt.val - targetTimebase);
+        if (diff < minDiff) {
+          minDiff = diff;
+          bestTb = opt.val;
+        }
+      }
+      onTimebaseChange(bestTb);
+    }
+  };
+
   // Main Canvas Rendering Loop
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -176,9 +214,25 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     let animId: number;
 
     const render = () => {
-      const width = canvas.width;
-      const height = canvas.height;
-      if (width === 0 || height === 0) return;
+      const container = canvasContainerRef.current;
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const width = rect.width;
+      const height = rect.height;
+      if (width <= 0 || height <= 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const targetW = Math.round(width * dpr);
+      const targetH = Math.round(height * dpr);
+
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
 
       // Dark CRT background with slight green/blue tint
       ctx.fillStyle = '#050b14';
@@ -238,97 +292,128 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       }
       ctx.stroke();
 
-      // Trigger line indicator if active
-      if (channels[triggerSource]?.enabled) {
-        const trigCh = channels[triggerSource];
-        const trigY = midY - ((triggerLevel / trigCh.voltsPerDiv) + trigCh.offsetY) * dy;
-        if (trigY >= 0 && trigY <= height) {
-          ctx.strokeStyle = 'rgba(250, 204, 21, 0.5)';
-          ctx.setLineDash([4, 4]);
-          ctx.beginPath();
-          ctx.moveTo(0, trigY);
-          ctx.lineTo(width, trigY);
-          ctx.stroke();
-          ctx.setLineDash([]);
-          // Trigger arrow icon
-          ctx.fillStyle = '#facc15';
-          ctx.beginPath();
-          ctx.moveTo(width - 12, trigY);
-          ctx.lineTo(width, trigY - 5);
-          ctx.lineTo(width, trigY + 5);
-          ctx.fill();
-        }
-      }
+      // Check for enabled channels
+      const activeChannels = channels.filter((c) => c.enabled && c.pinId);
 
-      // Find trigger sample index for stabilization
-      let startSampleIdx = 0;
-      const totalTimeSpan = timebase * numDivsX;
-
-      if (samples.length > 20) {
-        const trigKey = `v${triggerSource}` as keyof ScopeSample;
-        // Search backwards for edge trigger
-        const searchRange = Math.min(samples.length - 2, 400);
-        let foundTrig = false;
-
-        for (let i = samples.length - 2; i >= samples.length - searchRange; i--) {
-          const vPrev = (samples[i][trigKey] as number) ?? 0;
-          const vNext = (samples[i + 1][trigKey] as number) ?? 0;
-          const isEdge =
-            triggerEdge === 'rising'
-              ? vPrev < triggerLevel && vNext >= triggerLevel
-              : vPrev > triggerLevel && vNext <= triggerLevel;
-
-          if (isEdge) {
-            startSampleIdx = i;
-            foundTrig = true;
-            break;
+      if (activeChannels.length === 0) {
+        // Draw helpful phosphor message
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No Probes Attached', midX, midY - 8);
+        ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
+        ctx.font = '11px sans-serif';
+        ctx.fillText('Tap "Attach Probe" or click any component/wire on the canvas', midX, midY + 12);
+      } else {
+        // Trigger indicator line if active
+        if (channels[triggerSource]?.enabled) {
+          const trigCh = channels[triggerSource];
+          const trigY = midY - ((triggerLevel / trigCh.voltsPerDiv) + trigCh.offsetY) * dy;
+          if (trigY >= 0 && trigY <= height) {
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.5)';
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, trigY);
+            ctx.lineTo(width, trigY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            // Trigger arrow icon
+            ctx.fillStyle = '#facc15';
+            ctx.beginPath();
+            ctx.moveTo(width - 12, trigY);
+            ctx.lineTo(width, trigY - 5);
+            ctx.lineTo(width, trigY + 5);
+            ctx.fill();
           }
         }
 
-        if (!foundTrig && triggerMode === 'auto') {
-          // Fallback to latest window
-          startSampleIdx = Math.max(0, samples.length - 500);
+        // Calculate time window for rendering
+        const totalTimeSpan = timebase * numDivsX;
+        const N = samples.length;
+
+        if (N >= 2) {
+          const tLatest = samples[N - 1].time;
+          let tStart = Math.max(0, tLatest - totalTimeSpan);
+
+          // Edge triggering search to freeze repetitive waveform
+          if (N > 15) {
+            const trigKey = `v${triggerSource}` as keyof ScopeSample;
+            let foundTrigTime: number | null = null;
+
+            // Search in range where sufficient data follows to fill the screen
+            const minTime = Math.max(0, tLatest - 2.5 * totalTimeSpan);
+            const maxTime = tLatest - 0.2 * totalTimeSpan;
+
+            // Find sample index range
+            let endSearchIdx = N - 2;
+            while (endSearchIdx > 0 && samples[endSearchIdx].time > maxTime) {
+              endSearchIdx--;
+            }
+
+            for (let i = endSearchIdx; i >= 1; i--) {
+              if (samples[i].time < minTime) break;
+              const vPrev = (samples[i - 1][trigKey] as number) ?? 0;
+              const vCurr = (samples[i][trigKey] as number) ?? 0;
+
+              const isEdge =
+                triggerEdge === 'rising'
+                  ? vPrev < triggerLevel && vCurr >= triggerLevel
+                  : vPrev > triggerLevel && vCurr <= triggerLevel;
+
+              if (isEdge) {
+                foundTrigTime = samples[i].time;
+                break;
+              }
+            }
+
+            if (foundTrigTime !== null) {
+              tStart = foundTrigTime;
+            }
+          }
+
+          // Render active channel waveforms
+          channels.forEach((ch) => {
+            if (!ch.enabled || !ch.pinId) return;
+
+            const key = `v${ch.id}` as keyof ScopeSample;
+            ctx.strokeStyle = ch.color;
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.shadowColor = ch.color;
+            ctx.shadowBlur = 4;
+            ctx.beginPath();
+
+            let hasMoved = false;
+            const voltsPerPixel = ch.voltsPerDiv / dy;
+
+            for (let i = 0; i < N; i++) {
+              const s = samples[i];
+              if (s.time < tStart - timebase * 0.2) continue;
+
+              const rawV = (s[key] as number) ?? 0;
+              const v = ch.coupling === 'ac' ? rawV - (measurements.vavg || 0) : rawV;
+
+              const dt = s.time - tStart;
+              const screenX = (dt / totalTimeSpan) * width;
+              if (screenX > width + 10) break;
+
+              const screenY = midY - (v / voltsPerPixel) - ch.offsetY * dy;
+              const clampedY = Math.max(-10, Math.min(height + 10, screenY));
+
+              if (!hasMoved) {
+                ctx.moveTo(screenX, clampedY);
+                hasMoved = true;
+              } else {
+                ctx.lineTo(screenX, clampedY);
+              }
+            }
+
+            ctx.stroke();
+            ctx.shadowBlur = 0; // reset glow
+          });
         }
       }
-
-      // Render channel waveforms
-      channels.forEach((ch) => {
-        if (!ch.enabled || !ch.pinId || samples.length < 2) return;
-
-        const key = `v${ch.id}` as keyof ScopeSample;
-        ctx.strokeStyle = ch.color;
-        ctx.lineWidth = 2;
-        ctx.shadowColor = ch.color;
-        ctx.shadowBlur = 4;
-        ctx.beginPath();
-
-        let hasMoved = false;
-        const triggerTime = samples[startSampleIdx]?.time ?? 0;
-
-        for (let i = startSampleIdx; i < samples.length; i++) {
-          const s = samples[i];
-          const rawV = (s[key] as number) ?? 0;
-          const v = ch.coupling === 'ac' ? rawV - measurements.vavg : rawV;
-
-          const dt = s.time - triggerTime;
-          const screenX = (dt / totalTimeSpan) * width;
-          if (screenX > width) break;
-
-          // Convert volts to canvas Y
-          // screen center is 0V + ch.offsetY
-          const voltsPerPixel = ch.voltsPerDiv / dy;
-          const screenY = midY - (v / voltsPerPixel) - ch.offsetY * dy;
-
-          if (!hasMoved) {
-            ctx.moveTo(screenX, screenY);
-            hasMoved = true;
-          } else {
-            ctx.lineTo(screenX, screenY);
-          }
-        }
-        ctx.stroke();
-        ctx.shadowBlur = 0; // reset shadow
-      });
 
       // Render Cursors if active
       if (showCursors) {
@@ -357,9 +442,10 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
         ctx.setLineDash([]);
 
         // Cursor readouts badge
+        const totalTimeSpan = timebase * numDivsX;
         const dtCursor = Math.abs(cursorX2 - cursorX1) * totalTimeSpan;
-        const activeCh = channels[selectedChannelId];
-        const dvCursor = Math.abs(cursorY2 - cursorY1) * numDivsY * activeCh.voltsPerDiv;
+        const activeCh = channels[selectedChannelId] || channels[0];
+        const dvCursor = Math.abs(cursorY2 - cursorY1) * numDivsY * (activeCh?.voltsPerDiv ?? 2.0);
 
         ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
         ctx.fillRect(8, height - 34, 260, 26);
@@ -367,10 +453,13 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
         ctx.strokeRect(8, height - 34, 260, 26);
         ctx.fillStyle = '#f472b6';
         ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
         ctx.fillText(`Δt: ${(dtCursor * 1000).toFixed(2)}ms (${dtCursor > 0 ? (1 / dtCursor).toFixed(1) : 0}Hz)`, 16, height - 18);
         ctx.fillStyle = '#34d399';
         ctx.fillText(`ΔV: ${formatVoltage(dvCursor)}`, 160, height - 18);
       }
+
+      ctx.restore();
     };
 
     render();
@@ -391,26 +480,9 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     cursorY2,
     selectedChannelId,
     measurements,
+    mobileTab,
+    isExpanded,
   ]);
-
-  // Handle canvas resize
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      canvas.width = rect.width * window.devicePixelRatio;
-      canvas.height = rect.height * window.devicePixelRatio;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
-      }
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isExpanded]);
 
   const activeChannel = channels[selectedChannelId];
 
@@ -498,6 +570,16 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+
+          {/* Auto Setup Button */}
+          <button
+            onClick={handleAutoSet}
+            title="Auto-scale volts and timebase to center waveform (Autoset)"
+            className="px-2 py-0.5 rounded-md bg-[#1a2230] hover:bg-[#222e42] text-[#38bdf8] border border-[#26354a] text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+          >
+            <Sparkles className="w-3 h-3" />
+            <span>AUTO</span>
+          </button>
         </div>
 
         {/* Mobile View Toggle (Screen vs Knobs) */}
@@ -583,7 +665,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
             mobileTab === 'screen' ? 'flex' : 'hidden md:flex'
           } flex-1 relative bg-slate-950 p-1.5 md:p-2 flex-col overflow-hidden`}
         >
-          <div className="flex-1 relative rounded border border-slate-800 overflow-hidden shadow-inner">
+          <div ref={canvasContainerRef} className="flex-1 relative rounded border border-slate-800 overflow-hidden shadow-inner">
             <canvas ref={canvasRef} className="w-full h-full block" />
 
             {/* Probe Placement Prompt Overlay */}

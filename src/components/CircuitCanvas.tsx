@@ -175,8 +175,8 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
         const currentSign = current >= 0 ? 1 : -1;
         const speed = Math.min(Math.max(Math.abs(current) * 800, 0.4), 6) * speedMultiplier * currentSign;
 
-        // Path geometry (Manhattan orthogonal route)
-        const waypoints = getOrthogonalRoute(fromPos, toPos);
+        // Path geometry (Manhattan orthogonal route, bypassing components)
+        const waypoints = getOrthogonalRoute(fromPos, toPos, components);
         const totalLen = getPathLength(waypoints);
         if (totalLen <= 0) return;
 
@@ -206,7 +206,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
 
     renderParticles();
     return () => cancelAnimationFrame(animId);
-  }, [wires, pinPosMap, pan, zoom, flowMode]);
+  }, [wires, pinPosMap, components, pan, zoom, flowMode]);
 
   // Handle canvas resize
   useEffect(() => {
@@ -376,7 +376,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
       style={{ touchAction: 'none' }}
-      className="relative flex-1 w-full h-full bg-[#0e1013] overflow-hidden cursor-crosshair select-none"
+      className="relative flex-1 min-h-0 w-full bg-[#0e1013] overflow-hidden cursor-crosshair select-none"
     >
       {/* Background Blueprint Grid pattern */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-60">
@@ -425,7 +425,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
             const toPos = pinPosMap.get(wire.toPinId);
             if (!fromPos || !toPos) return null;
 
-            const pathD = buildOrthogonalPathD(fromPos, toPos);
+            const pathD = buildOrthogonalPathD(fromPos, toPos, components);
             const isSelected = wire.id === selectedWireId;
             const strokeColor = getWireStrokeColor(wire);
 
@@ -435,6 +435,10 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                 className="cursor-pointer group"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (isSelectingProbeForChannel !== null) {
+                    onSelectProbePin(isSelectingProbeForChannel, wire.fromPinId);
+                    return;
+                  }
                   onSelectWire(wire.id);
                   onSelectComponent(null);
                 }}
@@ -489,7 +493,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               const startPos = pinPosMap.get(wiringFromPinId);
               if (!startPos) return null;
               const targetPos = hoveredPinId ? pinPosMap.get(hoveredPinId) || mouseCanvasPos : mouseCanvasPos;
-              const pathD = buildOrthogonalPathD(startPos, targetPos);
+              const pathD = buildOrthogonalPathD(startPos, targetPos, components);
               return (
                 <path
                   d={pathD}
@@ -626,6 +630,11 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                       onAddWire(wiringFromPinId, closestPin.id);
                       setWiringFromPinId(null);
                     }
+                    return;
+                  }
+                  if (isSelectingProbeForChannel !== null && comp.pins.length > 0) {
+                    e.stopPropagation();
+                    onSelectProbePin(isSelectingProbeForChannel, comp.pins[0].id);
                     return;
                   }
                   onSelectComponent(comp.id);
@@ -816,6 +825,48 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
             );
           })}
         </g>
+
+        {/* Scope Probe Badges on Canvas */}
+        <g className="probes-layer pointer-events-none">
+          {scopeChannels.filter((ch) => ch.enabled && ch.pinId).map((ch) => {
+            const pos = pinPosMap.get(ch.pinId!);
+            if (!pos) return null;
+            const label = ch.id === 0 ? 'CH1' : ch.id === 1 ? 'CH2' : ch.id === 2 ? 'CH3' : 'CH4';
+            return (
+              <g key={`scope-probe-${ch.id}`} transform={`translate(${pos.x}, ${pos.y})`}>
+                {/* Glowing beacon circle at pin */}
+                <circle cx={0} cy={0} r={5} fill={ch.color} opacity={0.8} />
+                <circle cx={0} cy={0} r={8} fill="none" stroke={ch.color} strokeWidth={1.5} opacity={0.6} />
+                {/* Angled probe lead */}
+                <line x1={0} y1={0} x2={16} y2={-16} stroke={ch.color} strokeWidth={2} strokeLinecap="round" />
+                {/* Probe badge pill */}
+                <g transform="translate(16, -26)">
+                  <rect
+                    x={0}
+                    y={0}
+                    width={32}
+                    height={16}
+                    rx={4}
+                    fill="#13151b"
+                    stroke={ch.color}
+                    strokeWidth={1.5}
+                  />
+                  <text
+                    x={16}
+                    y={11.5}
+                    textAnchor="middle"
+                    fill={ch.color}
+                    fontSize="9"
+                    fontWeight="bold"
+                    fontFamily="monospace"
+                  >
+                    {label}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
+        </g>
       </svg>
 
       {/* Mobile & Desktop Wiring Guidance Banner */}
@@ -912,13 +963,119 @@ function useMemoPinPositions(components: CircuitComponent[]) {
   }, [components]);
 }
 
-// Generate orthogonal Manhattan path points
+// Generate orthogonal Manhattan path points (routes around intermediate components)
 function getOrthogonalRoute(
   from: { x: number; y: number },
-  to: { x: number; y: number }
+  to: { x: number; y: number },
+  components: CircuitComponent[] = []
 ): { x: number; y: number }[] {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
+
+  // Check if this is a horizontal connection between two terminals on approximately the same line
+  if (Math.abs(dy) <= 12 && Math.abs(dx) >= 15) {
+    const xMin = Math.min(from.x, to.x);
+    const xMax = Math.max(from.x, to.x);
+    const yLine = (from.y + to.y) / 2;
+
+    // Check if the straight horizontal line passes under or through any component body
+    let passesUnderComponent = false;
+    for (const comp of components) {
+      const halfWidth = comp.rotation % 180 !== 0 ? 26 : 30;
+      const halfHeight = comp.rotation % 180 !== 0 ? 30 : 26;
+
+      // Component body vertical span
+      if (Math.abs(comp.y - yLine) <= halfHeight + 4) {
+        // Horizontal span of component body (exclude terminal lead tips)
+        const bodyLeft = comp.x - halfWidth;
+        const bodyRight = comp.x + halfWidth;
+        const overlap = Math.min(xMax - 6, bodyRight) - Math.max(xMin + 6, bodyLeft);
+        if (overlap > 6) {
+          passesUnderComponent = true;
+          break;
+        }
+      }
+    }
+
+    if (passesUnderComponent) {
+      // Route around the component instead of cutting under/through it
+      const yAbove = Math.min(from.y, to.y) - 45;
+      const yBelow = Math.max(from.y, to.y) + 45;
+
+      // Check whether above or below has more clearance
+      let hasAboveObstruction = false;
+      for (const comp of components) {
+        if (
+          Math.abs(comp.y - yAbove) < 28 &&
+          comp.x > xMin - 15 &&
+          comp.x < xMax + 15
+        ) {
+          hasAboveObstruction = true;
+          break;
+        }
+      }
+
+      const bypassY = hasAboveObstruction ? yBelow : yAbove;
+      return [
+        from,
+        { x: from.x, y: bypassY },
+        { x: to.x, y: bypassY },
+        to,
+      ];
+    }
+
+    return [from, to];
+  }
+
+  // Check if this is a vertical connection between two terminals on approximately the same line
+  if (Math.abs(dx) <= 12 && Math.abs(dy) >= 15) {
+    const yMin = Math.min(from.y, to.y);
+    const yMax = Math.max(from.y, to.y);
+    const xLine = (from.x + to.x) / 2;
+
+    let passesUnderComponent = false;
+    for (const comp of components) {
+      const halfWidth = comp.rotation % 180 !== 0 ? 26 : 30;
+      const halfHeight = comp.rotation % 180 !== 0 ? 30 : 26;
+
+      if (Math.abs(comp.x - xLine) <= halfWidth + 4) {
+        const bodyTop = comp.y - halfHeight;
+        const bodyBottom = comp.y + halfHeight;
+        const overlap = Math.min(yMax - 6, bodyBottom) - Math.max(yMin + 6, bodyTop);
+        if (overlap > 6) {
+          passesUnderComponent = true;
+          break;
+        }
+      }
+    }
+
+    if (passesUnderComponent) {
+      const xLeft = Math.min(from.x, to.x) - 45;
+      const xRight = Math.max(from.x, to.x) + 45;
+
+      let hasLeftObstruction = false;
+      for (const comp of components) {
+        if (
+          Math.abs(comp.x - xLeft) < 28 &&
+          comp.y > yMin - 15 &&
+          comp.y < yMax + 15
+        ) {
+          hasLeftObstruction = true;
+          break;
+        }
+      }
+
+      const bypassX = hasLeftObstruction ? xRight : xLeft;
+      return [
+        from,
+        { x: bypassX, y: from.y },
+        { x: bypassX, y: to.y },
+        to,
+      ];
+    }
+
+    return [from, to];
+  }
 
   if (Math.abs(dx) < 2 || Math.abs(dy) < 2) {
     return [from, to];
@@ -931,9 +1088,10 @@ function getOrthogonalRoute(
 
 function buildOrthogonalPathD(
   from: { x: number; y: number },
-  to: { x: number; y: number }
+  to: { x: number; y: number },
+  components: CircuitComponent[] = []
 ): string {
-  const pts = getOrthogonalRoute(from, to);
+  const pts = getOrthogonalRoute(from, to, components);
   return pts.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 }
 

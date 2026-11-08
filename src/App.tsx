@@ -57,15 +57,15 @@ export default function App() {
   const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState<boolean>(false);
   const [isMobileInspectorOpen, setIsMobileInspectorOpen] = useState<boolean>(false);
 
-  // 4 Oscilloscope channels (unattached by default)
+  // 4 Oscilloscope channels (with initial probes attached to RC filter)
   const [scopeChannels, setScopeChannels] = useState<ScopeChannel[]>([
     {
       id: 0,
       name: 'Channel 1',
       color: '#facc15', // Yellow Gold
-      enabled: false,
-      pinId: undefined,
-      voltsPerDiv: 2.0,
+      enabled: initialPreset.defaultScopeChannels?.channel1?.enabled ?? true,
+      pinId: initialPreset.defaultScopeChannels?.channel1?.pinId,
+      voltsPerDiv: initialPreset.defaultScopeChannels?.channel1?.voltsPerDiv ?? 2.0,
       offsetY: 0,
       coupling: 'dc',
     },
@@ -73,9 +73,9 @@ export default function App() {
       id: 1,
       name: 'Channel 2',
       color: '#06b6d4', // Cyan
-      enabled: false,
-      pinId: undefined,
-      voltsPerDiv: 2.0,
+      enabled: initialPreset.defaultScopeChannels?.channel2?.enabled ?? true,
+      pinId: initialPreset.defaultScopeChannels?.channel2?.pinId,
+      voltsPerDiv: initialPreset.defaultScopeChannels?.channel2?.voltsPerDiv ?? 2.0,
       offsetY: 0,
       coupling: 'dc',
     },
@@ -84,6 +84,7 @@ export default function App() {
       name: 'Channel 3',
       color: '#ec4899', // Magenta
       enabled: false,
+      pinId: undefined,
       voltsPerDiv: 2.0,
       offsetY: 0,
       coupling: 'dc',
@@ -93,6 +94,7 @@ export default function App() {
       name: 'Channel 4',
       color: '#84cc16', // Lime
       enabled: false,
+      pinId: undefined,
       voltsPerDiv: 2.0,
       offsetY: 0,
       coupling: 'dc',
@@ -109,80 +111,84 @@ export default function App() {
   const simulatorRef = useRef<CircuitSimulator>(new CircuitSimulator());
   const simTimeRef = useRef<number>(0);
   const samplesBufferRef = useRef<ScopeSample[]>([]);
+  const lastScopeSampleTimeRef = useRef<number>(0);
+  const lastScopeUpdateRef = useRef<number>(0);
+
+  // Synchronous refs to guarantee accurate state snapshots without stale closures
+  const componentsRef = useRef<CircuitComponent[]>(components);
+  const wiresRef = useRef<Wire[]>(wires);
+  useEffect(() => {
+    componentsRef.current = components;
+  }, [components]);
+  useEffect(() => {
+    wiresRef.current = wires;
+  }, [wires]);
 
   // Snapshot recording for Undo/Redo
   const recordSnapshot = useCallback(() => {
-    setUndoStack((prev) => {
-      const snap: CircuitSnapshot = {
-        components: JSON.parse(JSON.stringify(components)),
-        wires: JSON.parse(JSON.stringify(wires)),
-      };
-      const next = [...prev, snap];
-      return next.length > 50 ? next.slice(next.length - 50) : next;
-    });
+    const snap: CircuitSnapshot = {
+      components: JSON.parse(JSON.stringify(componentsRef.current)),
+      wires: JSON.parse(JSON.stringify(wiresRef.current)),
+    };
+    setUndoStack((prev) => [...prev.slice(-40), snap]);
     setRedoStack([]);
-  }, [components, wires]);
+  }, []);
 
   const handleUndo = useCallback(() => {
     setUndoStack((prevUndo) => {
       if (prevUndo.length === 0) return prevUndo;
       const previous = prevUndo[prevUndo.length - 1];
       const newUndo = prevUndo.slice(0, prevUndo.length - 1);
+
       const currentSnap: CircuitSnapshot = {
-        components: JSON.parse(JSON.stringify(components)),
-        wires: JSON.parse(JSON.stringify(wires)),
+        components: JSON.parse(JSON.stringify(componentsRef.current)),
+        wires: JSON.parse(JSON.stringify(wiresRef.current)),
       };
-      setRedoStack((prevRedo) => [currentSnap, ...prevRedo]);
-      setComponents(previous.components);
-      setWires(previous.wires);
-      setSelectedComponentId((curr) => (previous.components.some((c) => c.id === curr) ? curr : null));
-      setSelectedWireId((curr) => (previous.wires.some((w) => w.id === curr) ? curr : null));
+      setRedoStack((prevRedo) => [currentSnap, ...prevRedo.slice(0, 40)]);
+
+      // Apply snapshot safely outside state updater to avoid React scheduler conflicts
+      setTimeout(() => {
+        setComponents(previous.components);
+        setWires(previous.wires);
+        setSelectedComponentId(null);
+        setSelectedWireId(null);
+      }, 0);
+
       return newUndo;
     });
-  }, [components, wires]);
+  }, []);
 
   const handleRedo = useCallback(() => {
     setRedoStack((prevRedo) => {
       if (prevRedo.length === 0) return prevRedo;
       const next = prevRedo[0];
       const newRedo = prevRedo.slice(1);
+
       const currentSnap: CircuitSnapshot = {
-        components: JSON.parse(JSON.stringify(components)),
-        wires: JSON.parse(JSON.stringify(wires)),
+        components: JSON.parse(JSON.stringify(componentsRef.current)),
+        wires: JSON.parse(JSON.stringify(wiresRef.current)),
       };
-      setUndoStack((prevUndo) => [...prevUndo, currentSnap]);
-      setComponents(next.components);
-      setWires(next.wires);
-      setSelectedComponentId((curr) => (next.components.some((c) => c.id === curr) ? curr : null));
-      setSelectedWireId((curr) => (next.wires.some((w) => w.id === curr) ? curr : null));
+      setUndoStack((prevUndo) => [...prevUndo.slice(-40), currentSnap]);
+
+      setTimeout(() => {
+        setComponents(next.components);
+        setWires(next.wires);
+        setSelectedComponentId(null);
+        setSelectedWireId(null);
+      }, 0);
+
       return newRedo;
     });
-  }, [components, wires]);
+  }, []);
 
-  // Drag tracking for Undo/Redo
+  // Drag tracking: recording snapshot at drag start guarantees any move can be cleanly undone
   const handleDragStart = useCallback(() => {
-    preDragSnapshotRef.current = {
-      components: JSON.parse(JSON.stringify(components)),
-      wires: JSON.parse(JSON.stringify(wires)),
-    };
-  }, [components, wires]);
+    recordSnapshot();
+  }, [recordSnapshot]);
 
   const handleDragEnd = useCallback(() => {
-    if (preDragSnapshotRef.current) {
-      const moved = components.some((c) => {
-        const orig = preDragSnapshotRef.current?.components.find((o) => o.id === c.id);
-        return orig && (orig.x !== c.x || orig.y !== c.y);
-      });
-      if (moved) {
-        setUndoStack((prev) => {
-          const next = [...prev, preDragSnapshotRef.current!];
-          return next.length > 50 ? next.slice(next.length - 50) : next;
-        });
-        setRedoStack([]);
-      }
-      preDragSnapshotRef.current = null;
-    }
-  }, [components]);
+    // Already snapshotted at drag start
+  }, []);
 
   // Keyboard Shortcuts for Undo & Redo
   useEffect(() => {
@@ -230,7 +236,13 @@ export default function App() {
             dt
           );
 
-          if (step % 2 === 0 && !isScopePaused) {
+          const targetSampleDt = Math.max(0.00005, (timebase * 10) / 1000);
+          if (
+            !isScopePaused &&
+            (simTimeRef.current - lastScopeSampleTimeRef.current >= targetSampleDt ||
+              samplesBufferRef.current.length === 0)
+          ) {
+            lastScopeSampleTimeRef.current = simTimeRef.current;
             const sample: ScopeSample = {
               time: simTimeRef.current,
             };
@@ -243,7 +255,7 @@ export default function App() {
             });
 
             samplesBufferRef.current.push(sample);
-            if (samplesBufferRef.current.length > 1500) {
+            if (samplesBufferRef.current.length > 2500) {
               samplesBufferRef.current.shift();
             }
           }
@@ -263,7 +275,13 @@ export default function App() {
           audioEngine.stop();
         }
 
-        if (!isScopePaused && samplesBufferRef.current.length > 0) {
+        const now = performance.now();
+        if (
+          !isScopePaused &&
+          samplesBufferRef.current.length > 0 &&
+          now - lastScopeUpdateRef.current >= 30
+        ) {
+          lastScopeUpdateRef.current = now;
           setScopeSamples([...samplesBufferRef.current]);
         }
       }
@@ -276,13 +294,22 @@ export default function App() {
       cancelAnimationFrame(animId);
       audioEngine.stop();
     };
-  }, [isRunning, simSpeed, components, wires, scopeChannels, isScopePaused, soundEnabled]);
+  }, [isRunning, simSpeed, components, wires, scopeChannels, isScopePaused, soundEnabled, timebase]);
 
   const handleResetSim = () => {
     simulatorRef.current.reset();
     simTimeRef.current = 0;
     samplesBufferRef.current = [];
     setScopeSamples([]);
+    // Reset all live component states and un-blow blown LEDs
+    setComponents((prev) =>
+      prev.map((c) => ({
+        ...c,
+        state: undefined,
+      }))
+    );
+    // Ensure simulation is running
+    setIsRunning(true);
   };
 
   // Add component to canvas
@@ -442,10 +469,30 @@ export default function App() {
     setSelectedComponentId(null);
     setSelectedWireId(null);
 
-    if (preset.defaultScopeChannels?.timebase) {
-      setTimebase(preset.defaultScopeChannels.timebase);
+    if (preset.defaultScopeChannels) {
+      if (preset.defaultScopeChannels.timebase) {
+        setTimebase(preset.defaultScopeChannels.timebase);
+      }
+      setScopeChannels((prev) => [
+        {
+          ...prev[0],
+          pinId: preset.defaultScopeChannels?.channel1?.pinId,
+          enabled: preset.defaultScopeChannels?.channel1?.enabled ?? !!preset.defaultScopeChannels?.channel1?.pinId,
+          voltsPerDiv: preset.defaultScopeChannels?.channel1?.voltsPerDiv ?? prev[0].voltsPerDiv,
+          offsetY: preset.defaultScopeChannels?.channel1?.offsetY ?? 0,
+        },
+        {
+          ...prev[1],
+          pinId: preset.defaultScopeChannels?.channel2?.pinId,
+          enabled: preset.defaultScopeChannels?.channel2?.enabled ?? !!preset.defaultScopeChannels?.channel2?.pinId,
+          voltsPerDiv: preset.defaultScopeChannels?.channel2?.voltsPerDiv ?? prev[1].voltsPerDiv,
+          offsetY: preset.defaultScopeChannels?.channel2?.offsetY ?? 0,
+        },
+        ...prev.slice(2).map((ch) => ({ ...ch, pinId: undefined, enabled: false })),
+      ]);
+    } else {
+      setScopeChannels((prev) => prev.map((ch) => ({ ...ch, pinId: undefined, enabled: false })));
     }
-    setScopeChannels((prev) => prev.map((ch) => ({ ...ch, pinId: undefined, enabled: false })));
   };
 
   // Clear Canvas
@@ -568,7 +615,7 @@ export default function App() {
         />
 
         {/* Center Drag & Drop Schematic Canvas */}
-        <div className="flex-1 flex flex-col relative overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
           <CircuitCanvas
             components={components}
             wires={wires}
@@ -599,7 +646,7 @@ export default function App() {
 
           {/* Mobile Floating Action Toolbar for Selected Component */}
           {selectedComp && (
-            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-1.5 bg-[#17191e] border border-[#2d313b] p-1.5 px-2 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]">
+            <div className={`absolute ${isScopeMinimized ? 'bottom-14' : 'bottom-[255px]'} left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-1.5 bg-[#17191e] border border-[#2d313b] p-1.5 px-2 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]`}>
               <button
                 onClick={() => handleRotateComponent(selectedComp.id)}
                 className="px-3 py-2 rounded-lg bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] border border-[#2e323c] text-[#e4e7ee] font-medium flex items-center gap-1.5 min-h-[40px] cursor-pointer"
@@ -625,7 +672,7 @@ export default function App() {
               </button>
               <button
                 onClick={handleDeleteSelected}
-                className="p-2 rounded-lg bg-[#2a1b1e] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] border border-[#4a242a] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+                className="p-2 rounded-lg bg-[#2a1b1f] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] border border-[#4a242a] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Delete Component"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -645,7 +692,7 @@ export default function App() {
 
           {/* Mobile Floating Action Toolbar for Selected Wire */}
           {selectedWire && !selectedComp && (
-            <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-2 bg-[#17191e] border border-[#2d313b] p-1.5 px-3 rounded-xl shadow-2xl text-xs text-[#e4e7ee]">
+            <div className={`absolute ${isScopeMinimized ? 'bottom-14' : 'bottom-[255px]'} left-1/2 -translate-x-1/2 z-30 md:hidden flex items-center gap-2 bg-[#17191e] border border-[#2d313b] p-1.5 px-3 rounded-xl shadow-2xl text-xs text-[#e4e7ee]`}>
               <span className="text-[#8b909e] font-mono text-[11px]">Wire</span>
               <button
                 onClick={() => setIsMobileInspectorOpen(true)}
@@ -656,7 +703,7 @@ export default function App() {
               </button>
               <button
                 onClick={handleDeleteSelected}
-                className="p-2 rounded-lg bg-[#2a1b1e] text-[#f87171] hover:bg-[#382025] border border-[#4a242a] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+                className="p-2 rounded-lg bg-[#2a1b1f] text-[#f87171] hover:bg-[#382025] border border-[#4a242a] min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
                 title="Delete Wire"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -674,11 +721,11 @@ export default function App() {
             </div>
           )}
 
-          {/* Mobile Floating Add Button (when nothing selected and palette closed) */}
-          {!selectedComp && !selectedWire && !isMobilePaletteOpen && (
+          {/* Mobile Floating Add Button (only when scope is minimized so it never overlays open oscilloscope) */}
+          {!selectedComp && !selectedWire && !isMobilePaletteOpen && isScopeMinimized && (
             <button
               onClick={() => setIsMobilePaletteOpen(true)}
-              className="md:hidden absolute bottom-20 right-4 z-30 w-12 h-12 rounded-xl bg-[#20232a] hover:bg-[#282c35] active:bg-[#181a1f] border border-[#323742] text-[#f3f4f6] active:scale-95 shadow-2xl flex items-center justify-center font-bold text-2xl transition-all cursor-pointer"
+              className="md:hidden absolute bottom-14 right-4 z-30 w-12 h-12 rounded-xl bg-[#20232a] hover:bg-[#282c35] active:bg-[#181a1f] border border-[#323742] text-[#f3f4f6] active:scale-95 shadow-2xl flex items-center justify-center font-bold text-2xl transition-all cursor-pointer"
               title="Add Component"
             >
               +
@@ -727,6 +774,10 @@ export default function App() {
               setSelectedWireId(null);
             }}
             isMobileOpen={isMobileInspectorOpen}
+            onAttachProbe={(channelId, pinId) => {
+              handleSelectProbePin(channelId, pinId);
+              setIsScopeMinimized(false);
+            }}
           />
         )}
       </div>

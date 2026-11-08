@@ -177,6 +177,47 @@ export const StandardSymbolIcon: React.FC<StandardSymbolIconProps> = ({ type, cl
         </svg>
       );
 
+    case 'n_mosfet':
+      // N-MOSFET icon
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="13" cy="12" r="9" stroke={strokeColor} strokeWidth={1.2} opacity="0.6" />
+          <line x1="2" y1="12" x2="9" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="9" y1="7" x2="9" y2="17" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" />
+          {/* Drain and Source bars */}
+          <line x1="12" y1="7" x2="12" y2="10" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" />
+          <line x1="12" y1="8.5" x2="18" y2="8.5" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="8.5" x2="18" y2="3" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="12" y1="14" x2="12" y2="17" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" />
+          <line x1="12" y1="15.5" x2="18" y2="15.5" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="15.5" x2="18" y2="21" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Inward arrow on center substrate */}
+          <line x1="12" y1="12" x2="16" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="16" y1="12" x2="16" y2="15.5" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <polygon points="12,12 14.5,10.5 14.5,13.5" fill={strokeColor} />
+        </svg>
+      );
+
+    case 'p_mosfet':
+      // P-MOSFET icon
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="13" cy="12" r="9" stroke={strokeColor} strokeWidth={1.2} opacity="0.6" />
+          <line x1="2" y1="12" x2="9" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="9" y1="7" x2="9" y2="17" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" />
+          <line x1="12" y1="7" x2="12" y2="10" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" />
+          <line x1="12" y1="8.5" x2="18" y2="8.5" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="8.5" x2="18" y2="3" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="12" y1="14" x2="12" y2="17" stroke={strokeColor} strokeWidth={2} strokeLinecap="round" />
+          <line x1="12" y1="15.5" x2="18" y2="15.5" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="15.5" x2="18" y2="21" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Outward arrow on center substrate */}
+          <line x1="12" y1="12" x2="16" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="16" y1="12" x2="16" y2="8.5" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <polygon points="15.5,12 13,10.5 13,13.5" fill={strokeColor} />
+        </svg>
+      );
+
     case 'opamp':
       // Operational Amplifier triangle with +/- inputs
       return (

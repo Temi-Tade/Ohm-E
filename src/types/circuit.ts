@@ -17,6 +17,8 @@ export type ComponentType =
   | 'led'
   | 'npn'
   | 'pnp'
+  | 'n_mosfet'
+  | 'p_mosfet'
   | 'opamp'
   | 'switch'
   | 'push_button'
@@ -52,6 +54,8 @@ export interface CircuitComponent {
     brightness?: number; // for LED: 0 to 1
     isBlown?: boolean;
     audioFrequency?: number;
+    vgs?: number;
+    vds?: number;
   };
 }
 
@@ -75,6 +79,11 @@ export interface ComponentParams {
   ledColor?: 'red' | 'green' | 'blue' | 'yellow' | 'white';
   maxCurrent?: number; // A (e.g. 0.04A for LED)
   beta?: number; // hFE for BJT (e.g. 100)
+
+  // MOSFETs
+  vth?: number; // Threshold voltage Vth (V, e.g. 2.0V for NMOS, -2.0V for PMOS)
+  transconductance?: number; // Gain parameter K in A/V^2 (e.g. 0.05)
+  rdsOn?: number; // On-state saturation resistance (e.g. 0.2 ohm)
 
   // OpAmp
   gain?: number; // Open loop gain (e.g. 100000)

@@ -472,6 +472,59 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
         </g>
       );
 
+    case 'n_mosfet':
+      return (
+        <g className="select-none">
+          {/* Envelope circle */}
+          <circle cx="0" cy="0" r="28" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Gate lead & plate */}
+          <line x1="-40" y1="0" x2="-14" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-14" y1="-16" x2="-14" y2="16" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+          {/* Dielectric insulation gap */}
+          {/* Drain channel bar & lead */}
+          <line x1="-6" y1="-16" x2="-6" y2="-6" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="-6" y1="-11" x2="18" y2="-11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="-11" x2="20" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Source channel bar & lead */}
+          <line x1="-6" y1="6" x2="-6" y2="16" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="-6" y1="11" x2="18" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="11" x2="20" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Substrate center bar with arrow pointing IN towards channel (N-type) */}
+          <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="6" y1="0" x2="6" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <polygon points="-5,0 0,-4 0,4" fill={strokeColor} />
+          <text x="-4" y="-32" textAnchor="middle" className="fill-cyan-400 text-[9px] font-mono font-medium">
+            NMOS (Vth={params.vth ?? 2}V)
+          </text>
+        </g>
+      );
+
+    case 'p_mosfet':
+      return (
+        <g className="select-none">
+          {/* Envelope circle */}
+          <circle cx="0" cy="0" r="28" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Gate lead & plate */}
+          <line x1="-40" y1="0" x2="-14" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-14" y1="-16" x2="-14" y2="16" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+          {/* Source channel bar & lead (top for P-channel) */}
+          <line x1="-6" y1="-16" x2="-6" y2="-6" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="-6" y1="-11" x2="18" y2="-11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="-11" x2="20" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Drain channel bar & lead (bottom for P-channel) */}
+          <line x1="-6" y1="6" x2="-6" y2="16" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="-6" y1="11" x2="18" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="11" x2="20" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Substrate center bar with arrow pointing OUT away from channel (P-type) */}
+          <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="6" y1="0" x2="6" y2="-11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <polygon points="5,0 0,-4 0,4" fill={strokeColor} />
+          <text x="-4" y="-32" textAnchor="middle" className="fill-pink-400 text-[9px] font-mono font-medium">
+            PMOS (Vth={params.vth ?? -2}V)
+          </text>
+        </g>
+      );
+
     case 'opamp':
       return (
         <g className="select-none">
