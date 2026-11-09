@@ -15,10 +15,14 @@ import {
   BookOpen,
   Volume2,
   VolumeX,
-  ChevronDown,
-  MoreHorizontal,
   Undo2,
   Redo2,
+  Activity,
+  Zap,
+  Waves,
+  Palette,
+  HelpCircle,
+  MoreHorizontal,
 } from 'lucide-react';
 import { CircuitPreset } from '../engine/presetCircuits';
 
@@ -48,6 +52,7 @@ interface ToolbarProps {
   onOpenMobilePalette?: () => void;
   isScopeOpen?: boolean;
   onToggleScope?: () => void;
+  selectedComponentName?: string | null;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -73,48 +78,55 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onExportJson,
   onImportJson,
   onOpenHelp,
+  isScopeOpen,
+  onToggleScope,
+  selectedComponentName,
 }) => {
   const [isPresetsOpen, setIsPresetsOpen] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
 
+  const cycleSpeed = () => {
+    if (simSpeed <= 0.6) onSpeedChange(1.0);
+    else if (simSpeed <= 1.2) onSpeedChange(2.0);
+    else onSpeedChange(0.5);
+  };
+
   return (
-    <header className="h-12 sm:h-13 bg-[#15171b] border-b border-[#252831] px-2 sm:px-3 md:px-4 flex items-center justify-between select-none z-30 shrink-0">
-      {/* Brand & Wordmark */}
+    <header className="h-12 bg-[#15171b] border-b border-[#252831] px-2 sm:px-3 flex items-center justify-between select-none z-30 shrink-0">
+      {/* Brand Icon & Wordmark */}
       <div className="flex items-center gap-2 shrink-0">
-        <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-md bg-[#1d1f25] border border-[#2d313b] flex items-center justify-center shrink-0">
-          {/* Authentic Ohm (Ω) vector mark */}
-          <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#10b981]" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <div className="w-7 h-7 rounded-md bg-[#1d1f25] border border-[#2d313b] flex items-center justify-center shrink-0">
+          <svg viewBox="0 0 24 24" fill="none" className="w-4 h-4 text-[#10b981]" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <path d="M4 20h4.5a3.5 3.5 0 0 0 3-1.8 7 7 0 1 1 5 0 3.5 3.5 0 0 0 3 1.8H20" />
           </svg>
         </div>
-        <div className="flex items-baseline gap-1.5 sm:gap-2">
-          <span className="font-semibold text-sm tracking-tight text-[#f0f2f6]">Ohm-E</span>
-          <span className="text-[11px] text-[#717684] hidden sm:inline">Circuit Workbench</span>
-        </div>
+        <span className="font-semibold text-sm tracking-tight text-[#f0f2f6] hidden xs:inline">Ohm-E</span>
       </div>
 
-      {/* Center Controls (Desktop) */}
-      <div className="hidden lg:flex items-center gap-1.5">
+      {/* Center Controls */}
+      <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar">
         {/* Play/Pause */}
         <button
           onClick={onToggleRun}
-          className={`px-3 py-1.5 rounded-md flex items-center gap-1.5 font-medium text-xs transition-colors cursor-pointer border ${
+          className={`px-2.5 py-1.5 sm:px-3 rounded-md flex items-center gap-1.5 transition-colors cursor-pointer border shrink-0 text-xs font-medium ${
             isRunning
               ? 'bg-[#241f17] hover:bg-[#2c2419] text-[#fbbf24] border-[#d97706]/40'
               : 'bg-[#17231c] hover:bg-[#1d2d23] text-[#34d399] border-[#059669]/40'
           }`}
-          title={isRunning ? 'Pause simulation' : 'Run simulation'}
+          title={isRunning ? 'Pause simulation (Space)' : 'Run simulation (Space)'}
+          aria-label={isRunning ? 'Pause simulation' : 'Run simulation'}
         >
           {isRunning ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
           <span>{isRunning ? 'Pause' : 'Run'}</span>
         </button>
 
-        {/* Step */}
+        {/* Step Forward */}
         <button
           onClick={onStepOnce}
           disabled={isRunning}
           title="Single step forward"
-          className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+          aria-label="Single step forward"
+          className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
         >
           <FastForward className="w-3.5 h-3.5" />
         </button>
@@ -123,145 +135,115 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         <button
           onClick={onReset}
           title="Restart simulation from t=0"
-          className="px-2.5 py-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] active:bg-[#181a20] text-[#cfd3dd] flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer"
+          aria-label="Restart simulation"
+          className="px-2 sm:px-2.5 py-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] active:bg-[#181a20] text-[#38bdf8] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
         >
-          <RotateCcw className="w-3.5 h-3.5 text-[#38bdf8]" />
-          <span>Restart</span>
+          <RotateCcw className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Restart</span>
         </button>
 
-        <div className="h-4 w-px bg-[#262832] mx-1" />
+        {/* Oscilloscope Graph Button - Appears only when a component is selected */}
+        {selectedComponentName && (
+          <button
+            onClick={onToggleScope}
+            title={`Oscilloscope: Inspect waveform across terminals of ${selectedComponentName}`}
+            aria-label={`Oscilloscope for ${selectedComponentName}`}
+            className={`px-2 sm:px-2.5 py-1.5 rounded-md border flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer shrink-0 ${
+              isScopeOpen
+                ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8] shadow-sm'
+                : 'bg-[#18202d] border-[#25364e] hover:bg-[#1f2b3e] text-[#38bdf8]'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-[#38bdf8] animate-pulse" />
+            <span className="hidden md:inline">Scope</span>
+          </button>
+        )}
+
+        <div className="h-4 w-px bg-[#262832] mx-0.5 shrink-0" />
 
         {/* Undo / Redo */}
         <button
           onClick={onUndo}
           disabled={!canUndo}
           title="Undo (Ctrl+Z)"
-          className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+          aria-label="Undo"
+          className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
         >
-          <Undo2 className="w-3.5 h-3.5" />
+          <Undo2 className="w-4 h-4" />
         </button>
         <button
           onClick={onRedo}
           disabled={!canRedo}
           title="Redo (Ctrl+Y)"
-          className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer"
+          aria-label="Redo"
+          className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] disabled:opacity-25 disabled:pointer-events-none transition-colors cursor-pointer shrink-0"
         >
-          <Redo2 className="w-3.5 h-3.5" />
+          <Redo2 className="w-4 h-4" />
         </button>
 
-        <div className="h-4 w-px bg-[#262832] mx-1" />
+        <div className="h-4 w-px bg-[#262832] mx-0.5 shrink-0 hidden md:block" />
 
-        {/* Speed Selector */}
-        <div className="flex items-center gap-1 px-2 py-1 bg-[#1a1c22] border border-[#282b34] rounded-md text-xs">
-          <span className="text-[#717684] text-[10px]">Speed:</span>
-          {[0.5, 1.0, 2.0].map((s) => (
-            <button
-              key={s}
-              onClick={() => onSpeedChange(s)}
-              className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition-colors ${
-                Math.abs(simSpeed - s) < 0.05
-                  ? 'bg-[#2b2e38] text-[#f0f2f6] font-semibold border border-[#3b3f4d]'
-                  : 'text-[#8b909f] hover:text-[#d0d4de]'
-              }`}
-            >
-              {s}x
-            </button>
-          ))}
-        </div>
+        {/* Simulation Speed Cycle Button (Desktop) */}
+        <button
+          onClick={cycleSpeed}
+          title={`Simulation Speed: ${simSpeed.toFixed(1)}x (Click to cycle 0.5x, 1x, 2x)`}
+          aria-label={`Simulation Speed: ${simSpeed.toFixed(1)}x`}
+          className="hidden md:flex px-2 py-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] items-center gap-1 text-[11px] font-mono cursor-pointer shrink-0"
+        >
+          <Zap className="w-3.5 h-3.5 text-amber-400" />
+          <span>{simSpeed.toFixed(1)}x</span>
+        </button>
 
-        <div className="h-4 w-px bg-[#262832] mx-1" />
-
-        {/* Current Flow mode */}
+        {/* Current Flow Mode Button (Desktop) */}
         <button
           onClick={onToggleFlowMode}
-          title="Toggle current particles: Conventional / Electron / Off"
-          className="px-2.5 py-1.5 rounded-md border border-[#282b34] bg-[#1a1c22] hover:bg-[#23262f] text-[#cfd3dd] text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+          title={`Current flow particles: ${flowMode} (Click to toggle)`}
+          aria-label={`Current flow mode: ${flowMode}`}
+          className="hidden md:flex px-2.5 py-1.5 rounded-md border border-[#282b34] bg-[#1e2026] hover:bg-[#272a33] text-xs text-[#cfd3dd] items-center gap-1.5 transition-colors cursor-pointer shrink-0"
         >
-          <div
-            className={`w-1.5 h-1.5 rounded-full ${
+          <Waves
+            className={`w-3.5 h-3.5 ${
               flowMode === 'conventional'
-                ? 'bg-amber-400'
+                ? 'text-amber-400'
                 : flowMode === 'electron'
-                ? 'bg-sky-400'
-                : 'bg-zinc-600'
+                ? 'text-sky-400'
+                : 'text-slate-600'
             }`}
           />
-          <span className="text-[11px] capitalize">{flowMode} Flow</span>
+          <span className="capitalize">{flowMode} Flow</span>
         </button>
 
-        {/* Volt Colors */}
+        {/* Wire Voltage Colors Button (Desktop) */}
         <button
           onClick={onToggleVoltColors}
-          title="Color wires by electric potential (voltage)"
-          className={`px-2.5 py-1.5 rounded-md border text-[11px] transition-colors cursor-pointer ${
+          title={`Color wires by voltage: ${showVoltColors ? 'Enabled' : 'Disabled'} (Click to toggle)`}
+          aria-label={`Voltage colors: ${showVoltColors ? 'On' : 'Off'}`}
+          className={`hidden md:flex px-2.5 py-1.5 rounded-md border text-xs items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
             showVoltColors
-              ? 'bg-[#242730] border-[#363a47] text-[#f0f2f6]'
-              : 'bg-[#1a1c22] border-[#282b34] text-[#717684] hover:text-[#cfd3dd]'
+              ? 'bg-[#242730] border-[#363a47] text-cyan-400'
+              : 'bg-[#1e2026] border-[#282b34] text-slate-500 hover:text-[#cfd3dd]'
           }`}
         >
-          Volt Colors: {showVoltColors ? 'On' : 'Off'}
+          <Palette className="w-3.5 h-3.5" />
+          <span>Volt Colors: {showVoltColors ? 'On' : 'Off'}</span>
         </button>
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-1 sm:gap-1.5">
-        {/* Mobile Undo / Redo */}
-        <div className="flex lg:hidden items-center gap-0.5 sm:gap-1">
-          <button
-            onClick={onUndo}
-            disabled={!canUndo}
-            className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] text-[#cfd3dd] disabled:opacity-25 disabled:pointer-events-none active:bg-[#272a33] cursor-pointer"
-            title="Undo"
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onRedo}
-            disabled={!canRedo}
-            className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] text-[#cfd3dd] disabled:opacity-25 disabled:pointer-events-none active:bg-[#272a33] cursor-pointer"
-            title="Redo"
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-
-        {/* Mobile Run/Pause */}
-        <button
-          onClick={onToggleRun}
-          className={`lg:hidden px-2 py-1.5 sm:px-2.5 rounded-md flex items-center gap-1 text-xs font-medium border cursor-pointer ${
-            isRunning
-              ? 'bg-[#241f17] text-[#fbbf24] border-[#d97706]/40'
-              : 'bg-[#17231c] text-[#34d399] border-[#059669]/40'
-          }`}
-          title={isRunning ? 'Pause simulation' : 'Run simulation'}
-        >
-          {isRunning ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-          <span className="hidden sm:inline">{isRunning ? 'Pause' : 'Run'}</span>
-        </button>
-
-        {/* Mobile Restart Simulation */}
-        <button
-          onClick={onReset}
-          className="lg:hidden p-1.5 sm:px-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] active:bg-[#181a20] flex items-center gap-1 cursor-pointer"
-          title="Restart simulation from t=0"
-        >
-          <RotateCcw className="w-3.5 h-3.5 text-[#38bdf8]" />
-          <span className="hidden sm:inline text-xs">Restart</span>
-        </button>
-
-        {/* Example Circuits Dropdown */}
+      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Preset Circuits Dropdown */}
         <div className="relative">
           <button
             onClick={() => {
               setIsPresetsOpen(!isPresetsOpen);
               setIsMoreMenuOpen(false);
             }}
-            className="px-2 py-1.5 sm:px-2.5 bg-[#1e2026] hover:bg-[#272a33] border border-[#2b2e37] rounded-md text-xs text-[#cfd3dd] flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer"
-            title="Load Example Circuit"
+            className="px-2.5 py-1.5 bg-[#1e2026] hover:bg-[#272a33] border border-[#2b2e37] rounded-md text-[#cfd3dd] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            title="Load Example Circuit Presets"
+            aria-label="Preset Circuits"
           >
-            <BookOpen className="w-3.5 h-3.5 text-[#8b909f]" />
+            <BookOpen className="w-3.5 h-3.5 text-[#cfd3dd]" />
             <span className="hidden sm:inline">Circuits</span>
-            <ChevronDown className="w-3 h-3 text-[#717684]" />
           </button>
 
           {isPresetsOpen && (
@@ -296,58 +278,66 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <button
             onClick={onToggleSound}
             title={soundEnabled ? 'Mute buzzer audio' : 'Enable buzzer audio'}
-            className={`p-1.5 rounded-md border transition-colors cursor-pointer ${
+            aria-label={soundEnabled ? 'Mute buzzer audio' : 'Enable buzzer audio'}
+            className={`p-1.5 sm:p-2 rounded-md border transition-colors cursor-pointer shrink-0 ${
               soundEnabled
                 ? 'bg-[#242730] border-[#363a47] text-[#f0f2f6]'
-                : 'bg-[#1a1c22] border-[#282b34] text-[#717684] hover:text-[#cfd3dd]'
+                : 'bg-[#1e2026] border-[#282b34] text-slate-500 hover:text-[#cfd3dd]'
             }`}
           >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
           {/* Export / Import JSON */}
           <button
             onClick={onExportJson}
-            title="Export Circuit File"
-            className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#8b909f] hover:text-[#cfd3dd] transition-colors cursor-pointer"
+            title="Export Circuit File (.json)"
+            aria-label="Export Circuit File"
+            className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#8b909f] hover:text-[#cfd3dd] transition-colors cursor-pointer shrink-0"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download className="w-4 h-4" />
           </button>
           <button
             onClick={onImportJson}
-            title="Import Circuit File"
-            className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#8b909f] hover:text-[#cfd3dd] transition-colors cursor-pointer"
+            title="Import Circuit File (.json)"
+            aria-label="Import Circuit File"
+            className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#8b909f] hover:text-[#cfd3dd] transition-colors cursor-pointer shrink-0"
           >
-            <Upload className="w-3.5 h-3.5" />
+            <Upload className="w-4 h-4" />
           </button>
 
           {/* Clear Canvas */}
           <button
             onClick={onClearCanvas}
             title="Clear canvas"
-            className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#2d1b1f] text-[#8b909f] hover:text-[#f87171] transition-colors cursor-pointer"
+            aria-label="Clear canvas"
+            className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#2d1b1f] text-[#8b909f] hover:text-[#f87171] transition-colors cursor-pointer shrink-0"
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-4 h-4" />
           </button>
 
           {/* Help Modal Toggle */}
           <button
             onClick={onOpenHelp}
-            className="px-2 py-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] text-xs transition-colors cursor-pointer ml-1"
+            title="Help, User Guide & Keyboard Shortcuts"
+            aria-label="Help & Guide"
+            className="px-2.5 py-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#cfd3dd] text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
           >
-            Help
+            <HelpCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Help</span>
           </button>
         </div>
 
-        {/* Mobile More Actions Menu */}
+        {/* Mobile/Tablet More Actions Menu */}
         <div className="relative lg:hidden">
           <button
             onClick={() => {
               setIsMoreMenuOpen(!isMoreMenuOpen);
               setIsPresetsOpen(false);
             }}
-            className="p-1.5 rounded-md bg-[#1e2026] border border-[#2b2e37] text-[#cfd3dd] active:bg-[#272a33] cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] text-[#cfd3dd] active:bg-[#272a33] cursor-pointer shrink-0"
             title="More Options"
+            aria-label="More Options"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
@@ -411,7 +401,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }}
                   className="p-1.5 rounded bg-[#20232a] text-[11px] flex items-center justify-center gap-1 text-[#dce0e8] hover:bg-[#282c35]"
                 >
-                  <Download className="w-3 h-3" />
+                  <Download className="w-3.5 h-3.5" />
                   <span>Export</span>
                 </button>
                 <button
@@ -421,7 +411,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }}
                   className="p-1.5 rounded bg-[#20232a] text-[11px] flex items-center justify-center gap-1 text-[#dce0e8] hover:bg-[#282c35]"
                 >
-                  <Upload className="w-3 h-3" />
+                  <Upload className="w-3.5 h-3.5" />
                   <span>Import</span>
                 </button>
                 <button
@@ -431,7 +421,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }}
                   className="p-1.5 rounded bg-[#20232a] text-[11px] flex items-center justify-center gap-1 text-[#dce0e8] hover:bg-[#282c35]"
                 >
-                  <BookOpen className="w-3 h-3" />
+                  <HelpCircle className="w-3.5 h-3.5" />
                   <span>Guide</span>
                 </button>
                 <button
@@ -441,7 +431,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }}
                   className="p-1.5 rounded bg-[#2a1b1f] text-[#f87171] text-[11px] flex items-center justify-center gap-1 border border-[#4a2228] hover:bg-[#382025]"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3.5 h-3.5" />
                   <span>Clear</span>
                 </button>
               </div>

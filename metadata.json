@@ -1,6 +1,6 @@
 {
   "name": "Ohm-E - Interactive Electronics Circuit Simulator",
-  "description": "Professional web-based electronics simulator with interactive circuit components, real-time transient MNA solver, multi-channel oscilloscope voltage graphing, and drag-and-drop schematic wiring.",
+  "description": "Professional web-based electronics simulator with interactive circuit components, real-time transient MNA solver, terminal oscilloscope voltage graphing, and drag-and-drop schematic wiring.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

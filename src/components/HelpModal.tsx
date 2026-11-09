@@ -62,10 +62,10 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
             <div className="p-3 rounded-lg bg-[#1a1c22] border border-[#262832] space-y-1.5">
               <div className="flex items-center gap-2 font-semibold text-[#fbbf24]">
                 <Activity className="w-4 h-4" />
-                <span>Multi-Channel Oscilloscope</span>
+                <span>Real-Time Oscilloscope</span>
               </div>
               <p className="text-[#8b909f] text-[11px] leading-relaxed">
-                Open the Oscilloscope drawer at the bottom anytime you want to measure and plot voltage waveforms across your circuit in real time.
+                Select any component or wire to instantly trace the waveform across its terminals in real time, with full timebase, volts/division, trigger, and cursor controls.
               </p>
             </div>
 

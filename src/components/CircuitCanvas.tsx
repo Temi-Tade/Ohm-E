@@ -8,7 +8,6 @@ import {
   CircuitComponent,
   Wire,
   Pin,
-  ScopeChannel,
 } from '../types/circuit';
 import { getPinAbsolutePos, rotatePoint } from '../engine/componentFactory';
 import { SchematicSymbol, formatVoltage, formatCurrent } from './SchematicSymbols';
@@ -26,11 +25,9 @@ interface CircuitCanvasProps {
   onAddWire: (fromPinId: string, toPinId: string) => void;
   onToggleSwitch: (component: CircuitComponent) => void;
   onWiperChange: (component: CircuitComponent, newWiper: number) => void;
-  isSelectingProbeForChannel: number | null;
-  onSelectProbePin: (channelId: number, pinId: string) => void;
-  scopeChannels: ScopeChannel[];
   flowMode: 'conventional' | 'electron' | 'none';
   showVoltColors: boolean;
+  isRunning?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
 }
@@ -40,6 +37,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
   wires,
   selectedComponentId,
   selectedWireId,
+  isRunning = true,
   onSelectComponent,
   onSelectWire,
   onUpdateComponentPosition,
@@ -48,9 +46,6 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
   onAddWire,
   onToggleSwitch,
   onWiperChange,
-  isSelectingProbeForChannel,
-  onSelectProbePin,
-  scopeChannels,
   flowMode,
   showVoltColors,
   onDragStart,
@@ -156,6 +151,11 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
     const renderParticles = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      if (!isRunning) {
+        // Paused: do not advance particles or draw current flow
+        return;
+      }
+
       ctx.save();
       ctx.translate(pan.x, pan.y);
       ctx.scale(zoom, zoom);
@@ -206,7 +206,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
 
     renderParticles();
     return () => cancelAnimationFrame(animId);
-  }, [wires, pinPosMap, components, pan, zoom, flowMode]);
+  }, [wires, pinPosMap, components, pan, zoom, flowMode, isRunning]);
 
   // Handle canvas resize
   useEffect(() => {
@@ -435,10 +435,6 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                 className="cursor-pointer group"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (isSelectingProbeForChannel !== null) {
-                    onSelectProbePin(isSelectingProbeForChannel, wire.fromPinId);
-                    return;
-                  }
                   onSelectWire(wire.id);
                   onSelectComponent(null);
                 }}
@@ -632,11 +628,6 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                     }
                     return;
                   }
-                  if (isSelectingProbeForChannel !== null && comp.pins.length > 0) {
-                    e.stopPropagation();
-                    onSelectProbePin(isSelectingProbeForChannel, comp.pins[0].id);
-                    return;
-                  }
                   onSelectComponent(comp.id);
                   onSelectWire(null);
                   const worldPos = screenToWorld(e.clientX, e.clientY);
@@ -691,6 +682,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                 <SchematicSymbol
                   component={comp}
                   isSelected={isSelected}
+                  isRunning={isRunning}
                   onToggleSwitch={onToggleSwitch}
                   onWiperChange={onWiperChange}
                 />
@@ -703,10 +695,6 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
 
                   const handlePinInteract = (e: React.SyntheticEvent) => {
                     e.stopPropagation();
-                    if (isSelectingProbeForChannel !== null) {
-                      onSelectProbePin(isSelectingProbeForChannel, pin.id);
-                      return;
-                    }
 
                     if (!wiringFromPinId) {
                       // Always select the component and start wire
@@ -813,6 +801,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                           x="0"
                           y={pin.y < 0 ? -9 : 12}
                           textAnchor="middle"
+                          transform={comp.rotation ? `rotate(${-comp.rotation}, 0, ${pin.y < 0 ? -9 : 12})` : undefined}
                           className="text-[9px] font-mono fill-slate-400 select-none pointer-events-none font-bold"
                         >
                           {pin.label}
@@ -821,48 +810,6 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                     </g>
                   );
                 })}
-              </g>
-            );
-          })}
-        </g>
-
-        {/* Scope Probe Badges on Canvas */}
-        <g className="probes-layer pointer-events-none">
-          {scopeChannels.filter((ch) => ch.enabled && ch.pinId).map((ch) => {
-            const pos = pinPosMap.get(ch.pinId!);
-            if (!pos) return null;
-            const label = ch.id === 0 ? 'CH1' : ch.id === 1 ? 'CH2' : ch.id === 2 ? 'CH3' : 'CH4';
-            return (
-              <g key={`scope-probe-${ch.id}`} transform={`translate(${pos.x}, ${pos.y})`}>
-                {/* Glowing beacon circle at pin */}
-                <circle cx={0} cy={0} r={5} fill={ch.color} opacity={0.8} />
-                <circle cx={0} cy={0} r={8} fill="none" stroke={ch.color} strokeWidth={1.5} opacity={0.6} />
-                {/* Angled probe lead */}
-                <line x1={0} y1={0} x2={16} y2={-16} stroke={ch.color} strokeWidth={2} strokeLinecap="round" />
-                {/* Probe badge pill */}
-                <g transform="translate(16, -26)">
-                  <rect
-                    x={0}
-                    y={0}
-                    width={32}
-                    height={16}
-                    rx={4}
-                    fill="#13151b"
-                    stroke={ch.color}
-                    strokeWidth={1.5}
-                  />
-                  <text
-                    x={16}
-                    y={11.5}
-                    textAnchor="middle"
-                    fill={ch.color}
-                    fontSize="9"
-                    fontWeight="bold"
-                    fontFamily="monospace"
-                  >
-                    {label}
-                  </text>
-                </g>
               </g>
             );
           })}

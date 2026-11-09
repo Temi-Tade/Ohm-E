@@ -24,7 +24,12 @@ export type ComponentType =
   | 'push_button'
   | 'buzzer'
   | 'voltmeter'
-  | 'ammeter';
+  | 'ammeter'
+  | 'photoresistor'
+  | 'thermistor'
+  | 'pir_sensor'
+  | 'temp_sensor'
+  | 'sound_sensor';
 
 export interface Pin {
   id: string;
@@ -93,6 +98,13 @@ export interface ComponentParams {
   // Controls
   closed?: boolean; // for switch
   pressed?: boolean; // for push button
+
+  // Sensors
+  lux?: number; // 0 to 1000 lux for photoresistor
+  temperature?: number; // -40 to 125 °C for thermistor & temp sensor
+  motionDetected?: boolean; // true/false for PIR motion sensor
+  soundLevel?: number; // 0 to 100 dB for acoustic sensor
+  sensitivity?: number; // threshold sensitivity (0-100)
 
   // Internal states for transient solver
   prevVoltage?: number;

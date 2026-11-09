@@ -255,7 +255,7 @@ export class CircuitSimulator {
               compId: comp.id,
               nodePlus: topology.pinToNode.get(pPin.id) ?? 0,
               nodeMinus: topology.pinToNode.get(nPin.id) ?? 0,
-              voltage: comp.params.voltage ?? 9,
+              voltage: comp.params.voltage ?? 5,
             });
           }
         } else if (comp.type === 'ac_source') {
@@ -339,6 +339,67 @@ export class CircuitSimulator {
               resistance: 10, // 10Ω output impedance
             });
           }
+        } else if (comp.type === 'pir_sensor') {
+          const vccPin = comp.pins.find(p => p.name === 'VCC');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          if (vccPin && gndPin && outPin) {
+            const nVcc = topology.pinToNode.get(vccPin.id) ?? 0;
+            const nGnd = topology.pinToNode.get(gndPin.id) ?? 0;
+            const nOut = topology.pinToNode.get(outPin.id) ?? 0;
+            const vSup = (nodeVoltages[nVcc] ?? 0) - (nodeVoltages[nGnd] ?? 0);
+            const isMotion = comp.params.motionDetected ?? false;
+            // Active if powered (VCC-GND >= 2.5V): 3.3V logic high on motion, 0V idle
+            const outV = vSup >= 2.5 && isMotion ? Math.min(vSup, 3.3) : 0;
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: nOut,
+              nodeMinus: nGnd,
+              voltage: outV,
+              resistance: 40,
+            });
+          }
+        } else if (comp.type === 'temp_sensor') {
+          const vccPin = comp.pins.find(p => p.name === 'VCC');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const outPin = comp.pins.find(p => p.name === 'VOUT');
+          if (vccPin && gndPin && outPin) {
+            const nVcc = topology.pinToNode.get(vccPin.id) ?? 0;
+            const nGnd = topology.pinToNode.get(gndPin.id) ?? 0;
+            const nOut = topology.pinToNode.get(outPin.id) ?? 0;
+            const vSup = (nodeVoltages[nVcc] ?? 0) - (nodeVoltages[nGnd] ?? 0);
+            const temp = comp.params.temperature ?? 25; // °C
+            // LM35/TMP36 linear output: 10mV/°C + 0.5V offset
+            const targetOut = vSup >= 2.5 ? Math.max(0, Math.min(0.5 + 0.01 * temp, vSup - 0.1)) : 0;
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: nOut,
+              nodeMinus: nGnd,
+              voltage: targetOut,
+              resistance: 20,
+            });
+          }
+        } else if (comp.type === 'sound_sensor') {
+          const vccPin = comp.pins.find(p => p.name === 'VCC');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          if (vccPin && gndPin && outPin) {
+            const nVcc = topology.pinToNode.get(vccPin.id) ?? 0;
+            const nGnd = topology.pinToNode.get(gndPin.id) ?? 0;
+            const nOut = topology.pinToNode.get(outPin.id) ?? 0;
+            const vSup = (nodeVoltages[nVcc] ?? 0) - (nodeVoltages[nGnd] ?? 0);
+            const soundLevel = comp.params.soundLevel ?? 40;
+            const sensitivity = comp.params.sensitivity ?? 60;
+            const isTriggered = soundLevel >= sensitivity;
+            const outV = vSup >= 2.5 && isTriggered ? Math.min(vSup, 3.3) : 0;
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: nOut,
+              nodeMinus: nGnd,
+              voltage: outV,
+              resistance: 50,
+            });
+          }
         }
       }
 
@@ -380,6 +441,23 @@ export class CircuitSimulator {
           const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
           const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
           const R = Math.max(comp.params.resistance ?? 1000, 0.001);
+          stampConductance(n1, n2, 1 / R);
+        } else if (comp.type === 'photoresistor') {
+          const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
+          const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
+          const lux = Math.max(comp.params.lux ?? 250, 0);
+          // R(lux) ~ 500 + 500000 / (lux + 1)
+          const R = Math.max(500 + 500000 / (lux + 1), 10);
+          stampConductance(n1, n2, 1 / R);
+        } else if (comp.type === 'thermistor') {
+          const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
+          const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
+          const tempC = comp.params.temperature ?? 25;
+          const T = tempC + 273.15;
+          const T0 = 298.15; // 25°C in Kelvin
+          const R0 = comp.params.resistance ?? 10000;
+          const B = comp.params.beta ?? 3950;
+          const R = Math.min(Math.max(R0 * Math.exp(B * (1 / T - 1 / T0)), 10), 1e7);
           stampConductance(n1, n2, 1 / R);
         } else if (comp.type === 'switch') {
           const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
@@ -684,6 +762,18 @@ export class CircuitSimulator {
         let current = 0;
         if (comp.type === 'resistor' || comp.type === 'voltmeter' || comp.type === 'buzzer') {
           const R = Math.max(comp.params.resistance ?? 1000, 0.001);
+          current = vDrop / R;
+        } else if (comp.type === 'photoresistor') {
+          const lux = Math.max(comp.params.lux ?? 250, 0);
+          const R = Math.max(500 + 500000 / (lux + 1), 10);
+          current = vDrop / R;
+        } else if (comp.type === 'thermistor') {
+          const tempC = comp.params.temperature ?? 25;
+          const T = tempC + 273.15;
+          const T0 = 298.15;
+          const R0 = comp.params.resistance ?? 10000;
+          const B = comp.params.beta ?? 3950;
+          const R = Math.min(Math.max(R0 * Math.exp(B * (1 / T - 1 / T0)), 10), 1e7);
           current = vDrop / R;
         } else if (comp.type === 'switch') {
           const isClosed = comp.params.closed ?? true;

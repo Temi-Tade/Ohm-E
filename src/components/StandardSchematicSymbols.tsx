@@ -294,6 +294,59 @@ export const StandardSymbolIcon: React.FC<StandardSymbolIconProps> = ({ type, cl
         </svg>
       );
 
+    case 'photoresistor':
+      // Zigzag with two arrows pointing in
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="12" cy="12" r="9" stroke={strokeColor} strokeWidth={1.2} strokeDasharray="2,2" />
+          <path d="M 3 12 L 6 12 L 8 9 L 10 15 L 12 9 L 14 15 L 16 9 L 18 12 L 21 12" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <path d="M 4 4 L 7 7 M 6 3 L 7 7 L 3 6" stroke="#fbbf24" strokeWidth={1.4} strokeLinecap="round" />
+          <path d="M 8 3 L 11 6 M 10 2 L 11 6 L 7 5" stroke="#fbbf24" strokeWidth={1.4} strokeLinecap="round" />
+        </svg>
+      );
+
+    case 'thermistor':
+      // Resistor with diagonal -t line
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <path d="M 2 12 L 6 12 L 8 8 L 11 16 L 13 8 L 16 16 L 18 12 L 22 12" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <path d="M 5 19 L 8 19 L 16 5" stroke="#f43f5e" strokeWidth={1.6} strokeLinecap="round" />
+        </svg>
+      );
+
+    case 'pir_sensor':
+      // Sensor module with dome and wave rays
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="3" y="4" width="18" height="16" rx="3" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="12" cy="12" r="4.5" stroke="#38bdf8" strokeWidth={1.4} />
+          <path d="M 12 6 Q 14 4 17 6" stroke="#60a5fa" strokeWidth={1.2} strokeLinecap="round" />
+          <circle cx="17" cy="7" r="1.2" fill="#34d399" />
+        </svg>
+      );
+
+    case 'temp_sensor':
+      // Thermometer inside sensor module
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="3" y="4" width="18" height="16" rx="3" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <rect x="10.5" y="7" width="3" height="7" rx="1.5" stroke="#f43f5e" strokeWidth={1.2} />
+          <circle cx="12" cy="15" r="2.5" fill="#f43f5e" />
+          <line x1="12" y1="9" x2="12" y2="13" stroke="#f43f5e" strokeWidth={1.8} strokeLinecap="round" />
+        </svg>
+      );
+
+    case 'sound_sensor':
+      // Microphone module
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="3" y="4" width="18" height="16" rx="3" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="11" cy="12" r="3.5" stroke="#38bdf8" strokeWidth={1.4} />
+          <path d="M 15 9 Q 18 12 15 15" stroke="#60a5fa" strokeWidth={1.2} strokeLinecap="round" />
+          <circle cx="17" cy="7" r="1.2" fill="#38bdf8" />
+        </svg>
+      );
+
     default:
       return null;
   }

@@ -11,30 +11,32 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sliders,
   Sparkles,
   Crosshair,
-  Volume2,
-  VolumeX,
   ChevronUp,
   ChevronDown,
-  SlidersHorizontal,
+  X,
 } from 'lucide-react';
-import { ScopeChannel, ScopeSample, CircuitComponent, Pin } from '../types/circuit';
+import { ScopeSample, CircuitComponent, Wire } from '../types/circuit';
 import { formatVoltage } from './SchematicSymbols';
 
 interface OscilloscopeProps {
+  isOpen?: boolean;
+  onClose?: () => void;
   samples: ScopeSample[];
-  channels: ScopeChannel[];
-  components: CircuitComponent[];
+  selectedComponent: CircuitComponent | null;
+  selectedWire: Wire | null;
   timebase: number; // seconds per division, e.g. 0.002 = 2ms/div
   onTimebaseChange: (val: number) => void;
-  onUpdateChannel: (channelId: number, updates: Partial<ScopeChannel>) => void;
+  voltsPerDiv: number;
+  onVoltsPerDivChange: (val: number) => void;
+  offsetY: number;
+  onOffsetYChange: (val: number) => void;
+  coupling: 'dc' | 'ac';
+  onCouplingChange: (val: 'dc' | 'ac') => void;
   isPaused: boolean;
   onTogglePause: () => void;
   onClearSamples: () => void;
-  isSelectingProbeForChannel: number | null;
-  onStartSelectProbe: (channelId: number) => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
   isMinimized?: boolean;
@@ -69,30 +71,32 @@ const VOLTS_PER_DIV_OPTIONS = [
 ];
 
 export const Oscilloscope: React.FC<OscilloscopeProps> = ({
+  isOpen = true,
+  onClose,
   samples,
-  channels,
-  components,
+  selectedComponent,
+  selectedWire,
   timebase,
   onTimebaseChange,
-  onUpdateChannel,
+  voltsPerDiv,
+  onVoltsPerDivChange,
+  offsetY,
+  onOffsetYChange,
+  coupling,
+  onCouplingChange,
   isPaused,
   onTogglePause,
   onClearSamples,
-  isSelectingProbeForChannel,
-  onStartSelectProbe,
-  onToggleSound,
   isMinimized = false,
   onToggleMinimize,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'channels' | 'trigger' | 'cursors'>('channels');
-  const [selectedChannelId, setSelectedChannelId] = useState<number>(0);
+  const [activeTab, setActiveTab] = useState<'signal' | 'timebase' | 'trigger'>('signal');
   const [mobileTab, setMobileTab] = useState<'screen' | 'knobs'>('screen');
 
   // Trigger settings
-  const [triggerSource, setTriggerSource] = useState<number>(0);
   const [triggerLevel, setTriggerLevel] = useState<number>(0); // Volts
   const [triggerEdge, setTriggerEdge] = useState<'rising' | 'falling'>('rising');
   const [triggerMode, setTriggerMode] = useState<'auto' | 'norm'>('auto');
@@ -104,25 +108,12 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
   const [cursorY1, setCursorY1] = useState<number>(0.3);
   const [cursorY2, setCursorY2] = useState<number>(0.7);
 
-  // Pin lookup for display
-  const pinLookup = useMemo(() => {
-    const map = new Map<string, { compName: string; pinName: string }>();
-    for (const comp of components) {
-      for (const pin of comp.pins) {
-        map.set(pin.id, { compName: comp.name, pinName: pin.label || pin.name });
-      }
-    }
-    return map;
-  }, [components]);
-
-  // Real-time measurements calculation
+  // Real-time measurements calculation from sample history
   const measurements = useMemo(() => {
-    const activeCh = channels[selectedChannelId];
-    if (!activeCh || !activeCh.enabled || samples.length < 5) {
-      return { vpp: 0, vrms: 0, vmax: 0, vmin: 0, freq: 0, vavg: 0 };
+    if (samples.length < 5) {
+      return { vpp: 0, vrms: 0, vmax: 0, vmin: 0, freq: 0, vavg: 0, latest: 0 };
     }
 
-    const key = `v${selectedChannelId}` as keyof ScopeSample;
     const values: number[] = [];
     let sumSq = 0;
     let sum = 0;
@@ -134,7 +125,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     const startIdx = samples.length - count;
 
     for (let i = startIdx; i < samples.length; i++) {
-      const v = (samples[i][key] as number) ?? 0;
+      const v = (samples[i].v as number) ?? (samples[i].v0 as number) ?? 0;
       values.push(v);
       sum += v;
       sumSq += v * v;
@@ -142,6 +133,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       if (v < min) min = v;
     }
 
+    const latest = values[values.length - 1] ?? 0;
     const avg = sum / values.length;
     const rms = Math.sqrt(sumSq / values.length);
     const vpp = max - min;
@@ -155,7 +147,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       }
     }
     const tSpan = (samples[samples.length - 1].time - samples[startIdx].time) || 0.001;
-    const freq = crossings > 1 && vpp > 0.1 ? (crossings / 2) / tSpan : 0;
+    const freq = crossings > 1 && vpp > 0.05 ? (crossings / 2) / tSpan : 0;
 
     return {
       vpp: isFinite(vpp) ? vpp : 0,
@@ -164,16 +156,16 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       vmin: isFinite(min) ? min : 0,
       vavg: isFinite(avg) ? avg : 0,
       freq: isFinite(freq) ? freq : 0,
+      latest: isFinite(latest) ? latest : 0,
     };
-  }, [samples, channels, selectedChannelId]);
+  }, [samples]);
 
   // Auto-setup function (AUTOSET)
   const handleAutoSet = () => {
-    const activeCh = channels[selectedChannelId];
-    if (!activeCh || !activeCh.pinId || samples.length < 5) return;
+    if (samples.length < 5) return;
 
     if (measurements.vpp > 0.05) {
-      // Find voltsPerDiv such that vpp fills ~4 divisions
+      // Scale voltsPerDiv such that waveform occupies ~4 vertical divisions
       const targetVdiv = measurements.vpp / 4;
       let bestVdiv = VOLTS_PER_DIV_OPTIONS[0].val;
       let minDiff = Math.abs(bestVdiv - targetVdiv);
@@ -184,11 +176,12 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           bestVdiv = opt.val;
         }
       }
-      onUpdateChannel(selectedChannelId, { voltsPerDiv: bestVdiv, offsetY: 0 });
+      onVoltsPerDivChange(bestVdiv);
+      onOffsetYChange(0);
     }
 
     if (measurements.freq > 0.1) {
-      // Show ~2 cycles across 10 divisions
+      // Display ~2 periods across 10 divisions
       const period = 1 / measurements.freq;
       const targetTimebase = (period * 2) / 10;
       let bestTb = TIMEBASE_OPTIONS[0].val;
@@ -234,7 +227,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       ctx.save();
       ctx.scale(dpr, dpr);
 
-      // Dark CRT background with slight green/blue tint
+      // Dark CRT background with slight green/blue phosphor tint
       ctx.fillStyle = '#050b14';
       ctx.fillRect(0, 0, width, height);
 
@@ -292,127 +285,110 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       }
       ctx.stroke();
 
-      // Check for enabled channels
-      const activeChannels = channels.filter((c) => c.enabled && c.pinId);
+      // Trigger line indicator
+      const trigY = midY - ((triggerLevel / voltsPerDiv) + offsetY) * dy;
+      if (trigY >= 0 && trigY <= height) {
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, trigY);
+        ctx.lineTo(width, trigY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // Trigger arrow icon
+        ctx.fillStyle = '#facc15';
+        ctx.beginPath();
+        ctx.moveTo(width - 12, trigY);
+        ctx.lineTo(width, trigY - 5);
+        ctx.lineTo(width, trigY + 5);
+        ctx.fill();
+      }
 
-      if (activeChannels.length === 0) {
-        // Draw helpful phosphor message
+      // Calculate time window for rendering
+      const totalTimeSpan = timebase * numDivsX;
+      const N = samples.length;
+
+      if (N >= 2) {
+        const tLatest = samples[N - 1].time;
+        let tStart = Math.max(0, tLatest - totalTimeSpan);
+
+        // Edge triggering search to freeze repetitive waveform
+        if (N > 15) {
+          let foundTrigTime: number | null = null;
+          const minTime = Math.max(0, tLatest - 2.5 * totalTimeSpan);
+          const maxTime = tLatest - 0.2 * totalTimeSpan;
+
+          let endSearchIdx = N - 2;
+          while (endSearchIdx > 0 && samples[endSearchIdx].time > maxTime) {
+            endSearchIdx--;
+          }
+
+          for (let i = endSearchIdx; i >= 1; i--) {
+            if (samples[i].time < minTime) break;
+            const vPrev = (samples[i - 1].v as number) ?? (samples[i - 1].v0 as number) ?? 0;
+            const vCurr = (samples[i].v as number) ?? (samples[i].v0 as number) ?? 0;
+
+            const isEdge =
+              triggerEdge === 'rising'
+                ? vPrev < triggerLevel && vCurr >= triggerLevel
+                : vPrev > triggerLevel && vCurr <= triggerLevel;
+
+            if (isEdge) {
+              foundTrigTime = samples[i].time;
+              break;
+            }
+          }
+
+          if (foundTrigTime !== null) {
+            tStart = foundTrigTime;
+          }
+        }
+
+        // Render terminal voltage waveform (glowing cyan phosphor)
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 5;
+        ctx.beginPath();
+
+        let hasMoved = false;
+        const voltsPerPixel = voltsPerDiv / dy;
+
+        for (let i = 0; i < N; i++) {
+          const s = samples[i];
+          if (s.time < tStart - timebase * 0.2) continue;
+
+          const rawV = (s.v as number) ?? (s.v0 as number) ?? 0;
+          const v = coupling === 'ac' ? rawV - (measurements.vavg || 0) : rawV;
+
+          const dt = s.time - tStart;
+          const screenX = (dt / totalTimeSpan) * width;
+          if (screenX > width + 10) break;
+
+          const screenY = midY - (v / voltsPerPixel) - offsetY * dy;
+          const clampedY = Math.max(-10, Math.min(height + 10, screenY));
+
+          if (!hasMoved) {
+            ctx.moveTo(screenX, clampedY);
+            hasMoved = true;
+          } else {
+            ctx.lineTo(screenX, clampedY);
+          }
+        }
+
+        ctx.stroke();
+        ctx.shadowBlur = 0; // reset glow
+      } else {
+        // Helpful prompt if no samples yet
         ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('No Probes Attached', midX, midY - 8);
+        ctx.fillText('Measuring Terminal Voltage', midX, midY - 8);
         ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
         ctx.font = '11px sans-serif';
-        ctx.fillText('Tap "Attach Probe" or click any component/wire on the canvas', midX, midY + 12);
-      } else {
-        // Trigger indicator line if active
-        if (channels[triggerSource]?.enabled) {
-          const trigCh = channels[triggerSource];
-          const trigY = midY - ((triggerLevel / trigCh.voltsPerDiv) + trigCh.offsetY) * dy;
-          if (trigY >= 0 && trigY <= height) {
-            ctx.strokeStyle = 'rgba(250, 204, 21, 0.5)';
-            ctx.setLineDash([4, 4]);
-            ctx.beginPath();
-            ctx.moveTo(0, trigY);
-            ctx.lineTo(width, trigY);
-            ctx.stroke();
-            ctx.setLineDash([]);
-            // Trigger arrow icon
-            ctx.fillStyle = '#facc15';
-            ctx.beginPath();
-            ctx.moveTo(width - 12, trigY);
-            ctx.lineTo(width, trigY - 5);
-            ctx.lineTo(width, trigY + 5);
-            ctx.fill();
-          }
-        }
-
-        // Calculate time window for rendering
-        const totalTimeSpan = timebase * numDivsX;
-        const N = samples.length;
-
-        if (N >= 2) {
-          const tLatest = samples[N - 1].time;
-          let tStart = Math.max(0, tLatest - totalTimeSpan);
-
-          // Edge triggering search to freeze repetitive waveform
-          if (N > 15) {
-            const trigKey = `v${triggerSource}` as keyof ScopeSample;
-            let foundTrigTime: number | null = null;
-
-            // Search in range where sufficient data follows to fill the screen
-            const minTime = Math.max(0, tLatest - 2.5 * totalTimeSpan);
-            const maxTime = tLatest - 0.2 * totalTimeSpan;
-
-            // Find sample index range
-            let endSearchIdx = N - 2;
-            while (endSearchIdx > 0 && samples[endSearchIdx].time > maxTime) {
-              endSearchIdx--;
-            }
-
-            for (let i = endSearchIdx; i >= 1; i--) {
-              if (samples[i].time < minTime) break;
-              const vPrev = (samples[i - 1][trigKey] as number) ?? 0;
-              const vCurr = (samples[i][trigKey] as number) ?? 0;
-
-              const isEdge =
-                triggerEdge === 'rising'
-                  ? vPrev < triggerLevel && vCurr >= triggerLevel
-                  : vPrev > triggerLevel && vCurr <= triggerLevel;
-
-              if (isEdge) {
-                foundTrigTime = samples[i].time;
-                break;
-              }
-            }
-
-            if (foundTrigTime !== null) {
-              tStart = foundTrigTime;
-            }
-          }
-
-          // Render active channel waveforms
-          channels.forEach((ch) => {
-            if (!ch.enabled || !ch.pinId) return;
-
-            const key = `v${ch.id}` as keyof ScopeSample;
-            ctx.strokeStyle = ch.color;
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.shadowColor = ch.color;
-            ctx.shadowBlur = 4;
-            ctx.beginPath();
-
-            let hasMoved = false;
-            const voltsPerPixel = ch.voltsPerDiv / dy;
-
-            for (let i = 0; i < N; i++) {
-              const s = samples[i];
-              if (s.time < tStart - timebase * 0.2) continue;
-
-              const rawV = (s[key] as number) ?? 0;
-              const v = ch.coupling === 'ac' ? rawV - (measurements.vavg || 0) : rawV;
-
-              const dt = s.time - tStart;
-              const screenX = (dt / totalTimeSpan) * width;
-              if (screenX > width + 10) break;
-
-              const screenY = midY - (v / voltsPerPixel) - ch.offsetY * dy;
-              const clampedY = Math.max(-10, Math.min(height + 10, screenY));
-
-              if (!hasMoved) {
-                ctx.moveTo(screenX, clampedY);
-                hasMoved = true;
-              } else {
-                ctx.lineTo(screenX, clampedY);
-              }
-            }
-
-            ctx.stroke();
-            ctx.shadowBlur = 0; // reset glow
-          });
-        }
+        ctx.fillText('Select any component on the schematic to inspect its waveform', midX, midY + 12);
       }
 
       // Render Cursors if active
@@ -444,8 +420,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
         // Cursor readouts badge
         const totalTimeSpan = timebase * numDivsX;
         const dtCursor = Math.abs(cursorX2 - cursorX1) * totalTimeSpan;
-        const activeCh = channels[selectedChannelId] || channels[0];
-        const dvCursor = Math.abs(cursorY2 - cursorY1) * numDivsY * (activeCh?.voltsPerDiv ?? 2.0);
+        const dvCursor = Math.abs(cursorY2 - cursorY1) * numDivsY * voltsPerDiv;
 
         ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
         ctx.fillRect(8, height - 34, 260, 26);
@@ -467,9 +442,10 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     return () => cancelAnimationFrame(animId);
   }, [
     samples,
-    channels,
     timebase,
-    triggerSource,
+    voltsPerDiv,
+    offsetY,
+    coupling,
     triggerLevel,
     triggerEdge,
     triggerMode,
@@ -478,49 +454,21 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     cursorX2,
     cursorY1,
     cursorY2,
-    selectedChannelId,
     measurements,
     mobileTab,
     isExpanded,
   ]);
 
-  const activeChannel = channels[selectedChannelId];
+  // Target item title
+  const targetLabel = selectedComponent
+    ? selectedComponent.name
+    : selectedWire
+    ? 'Selected Wire'
+    : 'Terminal Voltage';
 
-  // If minimized on mobile or desktop, render sleek bottom status bar
-  if (isMinimized) {
-    return (
-      <div
-        onClick={onToggleMinimize}
-        className="h-10 px-3 bg-[#15171b] border-t border-[#252831] flex items-center justify-between text-xs text-[#cfd3dd] cursor-pointer hover:bg-[#1a1c22] transition-colors select-none z-20 shrink-0"
-      >
-        <div className="flex items-center gap-2 overflow-hidden">
-          <Activity className="w-4 h-4 text-[#38bdf8] shrink-0" />
-          <span className="font-semibold text-[#f0f2f6] text-xs shrink-0 tracking-wider">OSCILLOSCOPE</span>
-          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
-            {channels.filter((c) => c.enabled && c.pinId).map((c) => (
-              <span
-                key={c.id}
-                className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-md bg-[#1c1e24] border border-[#2a2d36] shrink-0"
-                style={{ color: c.color }}
-              >
-                {c.name}: {formatVoltage(measurements.vpp)}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleMinimize?.();
-          }}
-          className="flex items-center gap-1 text-[11px] text-[#38bdf8] font-medium bg-[#1e2530] hover:bg-[#25303e] px-2.5 py-1 rounded-md border border-[#2d3a4d] shrink-0 cursor-pointer"
-        >
-          <span>Open</span>
-          <ChevronUp className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    );
+  // Completely hide oscilloscope panel unless opened
+  if (!isOpen) {
+    return null;
   }
 
   return (
@@ -530,52 +478,44 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       }`}
     >
       {/* Top Header Controls Bar */}
-      <div className="h-10 px-2 md:px-3 bg-[#16181d] border-b border-[#252831] flex items-center justify-between text-xs text-[#cfd3dd] shrink-0">
-        <div className="flex items-center gap-1.5 md:gap-2">
-          {/* Minimize button */}
-          {onToggleMinimize && (
-            <button
-              onClick={onToggleMinimize}
-              title="Minimize Oscilloscope"
-              className="p-1 rounded-md hover:bg-[#22252e] text-[#8b909f] hover:text-[#dce0e8] cursor-pointer"
-            >
-              <ChevronDown className="w-4 h-4" />
-            </button>
-          )}
-
-          <div className="flex items-center gap-1 font-semibold text-[#38bdf8]">
-            <Activity className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline tracking-wider">OSCILLOSCOPE</span>
+      <div className="h-9 px-2 md:px-3 bg-[#16181d] border-b border-[#252831] flex items-center justify-between text-xs text-[#cfd3dd] shrink-0 gap-1.5 overflow-hidden">
+        <div className="flex items-center gap-1 sm:gap-2 min-w-0 shrink">
+          <div className="flex items-center gap-1 font-semibold text-[#38bdf8] shrink min-w-0">
+            <Activity className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-[#f0f2f6] font-mono text-[11px] truncate max-w-[110px] sm:max-w-[180px]">
+              {targetLabel}
+            </span>
           </div>
 
-          <div className="h-4 w-px bg-[#262832] mx-0.5" />
+          <div className="h-3.5 w-px bg-[#262832] mx-0.5 shrink-0" />
 
           {/* Run/Pause Button */}
           <button
             onClick={onTogglePause}
-            className={`px-2 py-0.5 rounded-md flex items-center gap-1 font-medium text-[11px] transition-colors cursor-pointer border ${
+            className={`px-2 py-0.5 rounded flex items-center gap-1 font-medium text-[10px] transition-colors cursor-pointer border shrink-0 ${
               isPaused
                 ? 'bg-[#241f17] text-[#fbbf24] border-[#d97706]/40 hover:bg-[#2c2419]'
                 : 'bg-[#17231c] text-[#34d399] border-[#059669]/40 hover:bg-[#1d2d23]'
             }`}
+            title={isPaused ? 'Resume trace' : 'Hold trace'}
           >
-            {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+            {isPaused ? <Play className="w-2.5 h-2.5" /> : <Pause className="w-2.5 h-2.5" />}
             <span>{isPaused ? 'HOLD' : 'RUN'}</span>
           </button>
 
           <button
             onClick={onClearSamples}
-            title="Clear buffer"
-            className="p-1 rounded-md hover:bg-[#22252e] text-[#8b909f] hover:text-[#dce0e8] transition-colors cursor-pointer"
+            title="Clear waveform buffer"
+            className="p-1 rounded hover:bg-[#22252e] text-[#8b909f] hover:text-[#dce0e8] transition-colors cursor-pointer shrink-0"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3 h-3" />
           </button>
 
           {/* Auto Setup Button */}
           <button
             onClick={handleAutoSet}
-            title="Auto-scale volts and timebase to center waveform (Autoset)"
-            className="px-2 py-0.5 rounded-md bg-[#1a2230] hover:bg-[#222e42] text-[#38bdf8] border border-[#26354a] text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            title="Auto-scale volts and timebase to center waveform"
+            className="px-2 py-0.5 rounded bg-[#1a2230] hover:bg-[#222e42] text-[#38bdf8] border border-[#26354a] text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
           >
             <Sparkles className="w-3 h-3" />
             <span>AUTO</span>
@@ -583,10 +523,10 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
         </div>
 
         {/* Mobile View Toggle (Screen vs Knobs) */}
-        <div className="flex md:hidden bg-[#121317] p-0.5 rounded-md border border-[#252831] text-[11px]">
+        <div className="flex md:hidden bg-[#121317] p-0.5 rounded border border-[#252831] text-[10px] shrink-0">
           <button
             onClick={() => setMobileTab('screen')}
-            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+            className={`px-1.5 py-0.5 rounded font-medium transition-colors ${
               mobileTab === 'screen' ? 'bg-[#242730] text-white border border-[#363a46]' : 'text-[#8b909f]'
             }`}
           >
@@ -594,7 +534,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           </button>
           <button
             onClick={() => setMobileTab('knobs')}
-            className={`px-2 py-0.5 rounded font-medium transition-colors ${
+            className={`px-1.5 py-0.5 rounded font-medium transition-colors ${
               mobileTab === 'knobs' ? 'bg-[#242730] text-white border border-[#363a46]' : 'text-[#8b909f]'
             }`}
           >
@@ -602,62 +542,43 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           </button>
         </div>
 
-        {/* Channel Quick Selector Badges (Desktop or larger mobile) */}
-        <div className="hidden sm:flex items-center gap-1 overflow-x-auto no-scrollbar">
-          {channels.map((ch) => {
-            const probeInfo = ch.pinId ? pinLookup.get(ch.pinId) : null;
-            const isSelected = selectedChannelId === ch.id;
-
-            return (
-              <div
-                key={ch.id}
-                onClick={() => setSelectedChannelId(ch.id)}
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md cursor-pointer border text-[10px] transition-all shrink-0 ${
-                  isSelected
-                    ? 'border-[#38bdf8] bg-[#1a2530] shadow-xs'
-                    : 'border-[#262832] bg-[#1a1c22] hover:border-[#383c4a]'
-                }`}
-              >
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: ch.enabled ? ch.color : '#475569' }}
-                />
-                <span className="font-semibold" style={{ color: ch.enabled ? ch.color : '#8b909f' }}>
-                  {ch.name}
-                </span>
-                <span className="text-[9px] text-[#717684] max-w-[60px] truncate hidden md:inline">
-                  {probeInfo ? `${probeInfo.compName}.${probeInfo.pinName}` : 'Unattached'}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1 shrink-0">
           {/* Cursors toggle */}
           <button
             onClick={() => setShowCursors(!showCursors)}
-            className={`px-1.5 py-0.5 rounded flex items-center gap-1 font-mono text-[10px] border transition-colors cursor-pointer ${
+            title="Measurement Cursors"
+            className={`p-1 rounded flex items-center justify-center font-mono text-[10px] border transition-colors cursor-pointer ${
               showCursors
                 ? 'bg-pink-500/20 text-pink-300 border-pink-500/50'
                 : 'border-slate-800 hover:bg-slate-800 text-slate-400'
             }`}
           >
-            <Crosshair className="w-3 h-3" />
-            <span className="hidden sm:inline">CURSORS</span>
+            <Crosshair className="w-3.5 h-3.5" />
           </button>
 
           {/* Expand/Collapse */}
           <button
             onClick={() => setIsExpanded(!isExpanded)}
+            title={isExpanded ? 'Collapse size' : 'Expand size'}
             className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
           >
             {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
+
+          {/* Close Panel Button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              title="Close Oscilloscope"
+              className="p-1 rounded hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 border border-transparent hover:border-rose-900/40 transition-colors cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Scope Body: Canvas on Left, Instrument Knobs & Telemetry on Right */}
+      {/* Main Scope Body: Canvas on Left, Controls on Right */}
       <div className="flex-1 flex overflow-hidden">
         {/* CRT Display Area */}
         <div
@@ -667,28 +588,16 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
         >
           <div ref={canvasContainerRef} className="flex-1 relative rounded border border-slate-800 overflow-hidden shadow-inner">
             <canvas ref={canvasRef} className="w-full h-full block" />
-
-            {/* Probe Placement Prompt Overlay */}
-            {isSelectingProbeForChannel !== null && (
-              <div className="absolute inset-0 bg-sky-950/80 backdrop-blur-xs flex items-center justify-center p-2 pointer-events-none">
-                <div className="bg-slate-900 border border-sky-400 px-3 py-1.5 rounded-lg shadow-xl flex items-center gap-2.5 max-w-full">
-                  <div
-                    className="w-2.5 h-2.5 rounded-full animate-ping shrink-0"
-                    style={{ backgroundColor: channels[isSelectingProbeForChannel].color }}
-                  />
-                  <div className="text-xs font-semibold text-sky-200 truncate">
-                    Tap any pin or wire to attach {channels[isSelectingProbeForChannel].name}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Live Digital Telemetry HUD Bar under canvas */}
+          {/* Live Digital Telemetry HUD Bar */}
           <div className="h-6 mt-1 flex items-center justify-between px-2 text-[10px] sm:text-[11px] font-mono bg-slate-900/80 rounded border border-slate-800/80 text-slate-300 overflow-x-auto no-scrollbar shrink-0">
             <div className="flex items-center gap-3 shrink-0">
               <span className="text-slate-400">
-                CH{selectedChannelId + 1} Vpp: <strong className="text-white">{formatVoltage(measurements.vpp)}</strong>
+                V: <strong className="text-[#38bdf8]">{formatVoltage(measurements.latest)}</strong>
+              </span>
+              <span className="text-slate-400">
+                Vpp: <strong className="text-white">{formatVoltage(measurements.vpp)}</strong>
               </span>
               <span className="text-slate-400">
                 Vrms: <strong className="text-white">{formatVoltage(measurements.vrms)}</strong>
@@ -710,108 +619,71 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
         <div
           className={`${
             mobileTab === 'knobs' ? 'flex' : 'hidden md:flex'
-          } w-full md:w-80 border-l border-slate-800 bg-slate-900/90 flex-col text-xs text-slate-300 overflow-hidden shrink-0`}
+          } w-full md:w-72 lg:w-80 border-l border-slate-800 bg-slate-900/90 flex-col text-xs text-slate-300 overflow-hidden shrink-0`}
         >
           {/* Tabs */}
-          <div className="flex border-b border-slate-800 bg-slate-950/60">
+          <div className="flex border-b border-slate-800 bg-slate-950/60 shrink-0">
             <button
-              onClick={() => setActiveTab('channels')}
-              className={`flex-1 py-2 font-semibold text-center border-b-2 transition-colors ${
-                activeTab === 'channels'
+              onClick={() => setActiveTab('signal')}
+              className={`flex-1 py-1.5 text-[11px] font-semibold text-center border-b-2 transition-colors cursor-pointer ${
+                activeTab === 'signal'
                   ? 'border-sky-500 text-sky-400 bg-slate-900'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              CHANNEL
+              VOLTS
+            </button>
+            <button
+              onClick={() => setActiveTab('timebase')}
+              className={`flex-1 py-1.5 text-[11px] font-semibold text-center border-b-2 transition-colors cursor-pointer ${
+                activeTab === 'timebase'
+                  ? 'border-pink-500 text-pink-400 bg-slate-900'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              TIME
             </button>
             <button
               onClick={() => setActiveTab('trigger')}
-              className={`flex-1 py-2 font-semibold text-center border-b-2 transition-colors ${
+              className={`flex-1 py-1.5 text-[11px] font-semibold text-center border-b-2 transition-colors cursor-pointer ${
                 activeTab === 'trigger'
                   ? 'border-amber-500 text-amber-400 bg-slate-900'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              TRIGGER
-            </button>
-            <button
-              onClick={() => setActiveTab('cursors')}
-              className={`flex-1 py-2 font-semibold text-center border-b-2 transition-colors ${
-                activeTab === 'cursors'
-                  ? 'border-pink-500 text-pink-400 bg-slate-900'
-                  : 'border-transparent text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              TIMEBASE
+              TRIG
             </button>
           </div>
 
-          <div className="flex-1 p-3 overflow-y-auto space-y-3">
-            {activeTab === 'channels' && activeChannel && (
-              <div className="space-y-3">
-                {/* Channel Enable and Color Header */}
-                <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3.5 h-3.5 rounded-full"
-                      style={{ backgroundColor: activeChannel.color }}
-                    />
-                    <span className="font-bold text-sm" style={{ color: activeChannel.color }}>
-                      {activeChannel.name}
-                    </span>
+          <div className="flex-1 p-2.5 overflow-y-auto space-y-2.5">
+            {activeTab === 'signal' && (
+              <div className="space-y-2.5">
+                {/* Target Information */}
+                <div className="p-2 rounded bg-slate-950/80 border border-slate-800 space-y-1 overflow-hidden">
+                  <span className="text-[10px] text-slate-400 block font-semibold uppercase tracking-wider">
+                    Target Component
+                  </span>
+                  <div className="font-semibold text-xs text-[#38bdf8] truncate">
+                    {targetLabel}
                   </div>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <span className="text-[11px] text-slate-400">Active</span>
-                    <input
-                      type="checkbox"
-                      checked={activeChannel.enabled}
-                      onChange={(e) => onUpdateChannel(activeChannel.id, { enabled: e.target.checked })}
-                      className="accent-sky-500 w-4 h-4 rounded cursor-pointer"
-                    />
-                  </label>
-                </div>
-
-                {/* Probe Attachment Button */}
-                <div className="space-y-1">
-                  <span className="text-slate-400 text-[11px] block">Probe Point:</span>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => onStartSelectProbe(activeChannel.id)}
-                      className={`flex-1 py-1.5 px-2.5 rounded font-medium text-xs flex items-center justify-center gap-1.5 transition-colors border ${
-                        isSelectingProbeForChannel === activeChannel.id
-                          ? 'bg-sky-500 text-white border-sky-400 animate-pulse'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
-                      }`}
-                    >
-                      <Crosshair className="w-3.5 h-3.5" />
-                      <span>{isSelectingProbeForChannel === activeChannel.id ? 'Click Pin on Canvas...' : 'Attach Probe'}</span>
-                    </button>
-                    {activeChannel.pinId && (
-                      <button
-                        onClick={() => onUpdateChannel(activeChannel.id, { pinId: undefined })}
-                        className="px-2 py-1.5 bg-slate-800 hover:bg-rose-950/40 text-slate-400 hover:text-rose-300 rounded border border-slate-700 text-xs"
-                      >
-                        Detach
-                      </button>
-                    )}
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 font-mono">
+                    <span>Voltage:</span>
+                    <span className="text-white font-bold">{formatVoltage(measurements.latest)}</span>
                   </div>
                 </div>
 
-                {/* Volts / Div Knob Selector */}
+                {/* Volts / Div Scale Selector */}
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">Scale (Volts/Div):</span>
-                    <span className="font-mono text-sky-400 font-bold">
-                      {activeChannel.voltsPerDiv >= 1
-                        ? `${activeChannel.voltsPerDiv}V`
-                        : `${activeChannel.voltsPerDiv * 1000}mV`}
-                      /div
+                  <div className="flex justify-between items-center text-[11px] min-w-0">
+                    <span className="text-slate-400 truncate">Scale:</span>
+                    <span className="font-mono text-sky-400 font-bold shrink-0 ml-1">
+                      {voltsPerDiv >= 1 ? `${voltsPerDiv}V` : `${voltsPerDiv * 1000}mV`} / div
                     </span>
                   </div>
                   <select
-                    value={activeChannel.voltsPerDiv}
-                    onChange={(e) => onUpdateChannel(activeChannel.id, { voltsPerDiv: parseFloat(e.target.value) })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
+                    value={voltsPerDiv}
+                    onChange={(e) => onVoltsPerDivChange(parseFloat(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-sky-500 font-mono"
                   >
                     {VOLTS_PER_DIV_OPTIONS.map((opt) => (
                       <option key={opt.val} value={opt.val}>
@@ -824,16 +696,16 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
                 {/* Vertical Position Offset */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">Position Offset (Div):</span>
-                    <span className="font-mono text-slate-200">{activeChannel.offsetY.toFixed(1)} div</span>
+                    <span className="text-slate-400">Vertical Offset:</span>
+                    <span className="font-mono text-slate-200">{offsetY.toFixed(1)} div</span>
                   </div>
                   <input
                     type="range"
                     min="-4"
                     max="4"
                     step="0.2"
-                    value={activeChannel.offsetY}
-                    onChange={(e) => onUpdateChannel(activeChannel.id, { offsetY: parseFloat(e.target.value) })}
+                    value={offsetY}
+                    onChange={(e) => onOffsetYChange(parseFloat(e.target.value))}
                     className="w-full accent-sky-500 cursor-pointer"
                   />
                 </div>
@@ -845,9 +717,9 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
                     {(['dc', 'ac'] as const).map((coup) => (
                       <button
                         key={coup}
-                        onClick={() => onUpdateChannel(activeChannel.id, { coupling: coup })}
+                        onClick={() => onCouplingChange(coup)}
                         className={`py-1 rounded font-mono font-bold text-xs uppercase border transition-colors ${
-                          activeChannel.coupling === coup
+                          coupling === coup
                             ? 'bg-sky-500/20 text-sky-300 border-sky-500'
                             : 'border-slate-800 bg-slate-800/60 text-slate-400 hover:text-slate-200'
                         }`}
@@ -860,29 +732,67 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
               </div>
             )}
 
+            {activeTab === 'timebase' && (
+              <div className="space-y-2.5">
+                <span className="font-bold text-pink-400 text-[11px] block tracking-wide">TIMEBASE (X-AXIS)</span>
+
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center text-[11px] min-w-0">
+                    <span className="text-slate-400 truncate">Time / Div:</span>
+                    <span className="font-mono text-pink-400 font-bold shrink-0 ml-1">
+                      {timebase >= 1 ? `${timebase}s` : timebase >= 0.001 ? `${timebase * 1000}ms` : `${timebase * 1e6}µs`}/div
+                    </span>
+                  </div>
+                  <select
+                    value={timebase}
+                    onChange={(e) => onTimebaseChange(parseFloat(e.target.value))}
+                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-pink-500 font-mono"
+                  >
+                    {TIMEBASE_OPTIONS.map((opt) => (
+                      <option key={opt.val} value={opt.val}>
+                        {opt.label} / div
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {showCursors && (
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    <span className="text-[11px] font-bold text-pink-300">CURSOR POSITIONS</span>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>Time X1 / X2:</span>
+                        <span>
+                          {(cursorX1 * 100).toFixed(0)}% / {(cursorX2 * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={cursorX1}
+                        onChange={(e) => setCursorX1(parseFloat(e.target.value))}
+                        className="w-full accent-pink-500 cursor-pointer"
+                      />
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={cursorX2}
+                        onChange={(e) => setCursorX2(parseFloat(e.target.value))}
+                        className="w-full accent-pink-500 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {activeTab === 'trigger' && (
               <div className="space-y-3">
                 <span className="font-bold text-amber-400 text-xs block">EDGE TRIGGERING</span>
-
-                {/* Trigger Source */}
-                <div className="space-y-1">
-                  <span className="text-slate-400 text-[11px] block">Source:</span>
-                  <div className="grid grid-cols-4 gap-1">
-                    {channels.map((ch) => (
-                      <button
-                        key={ch.id}
-                        onClick={() => setTriggerSource(ch.id)}
-                        className={`py-1 rounded font-bold text-xs border transition-colors ${
-                          triggerSource === ch.id
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500'
-                            : 'border-slate-800 bg-slate-800/60 text-slate-400'
-                        }`}
-                      >
-                        {ch.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
                 {/* Trigger Edge */}
                 <div className="space-y-1">
@@ -954,64 +864,6 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
                     </button>
                   </div>
                 </div>
-              </div>
-            )}
-
-            {activeTab === 'cursors' && (
-              <div className="space-y-3">
-                <span className="font-bold text-pink-400 text-xs block">HORIZONTAL TIMEBASE</span>
-
-                <div className="space-y-1">
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">Time / Division:</span>
-                    <span className="font-mono text-pink-400 font-bold">
-                      {timebase >= 1 ? `${timebase} s` : timebase >= 0.001 ? `${timebase * 1000} ms` : `${timebase * 1e6} µs`}/div
-                    </span>
-                  </div>
-                  <select
-                    value={timebase}
-                    onChange={(e) => onTimebaseChange(parseFloat(e.target.value))}
-                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-pink-500 font-mono"
-                  >
-                    {TIMEBASE_OPTIONS.map((opt) => (
-                      <option key={opt.val} value={opt.val}>
-                        {opt.label} / div
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {showCursors && (
-                  <div className="pt-2 border-t border-slate-800 space-y-2">
-                    <span className="text-[11px] font-bold text-pink-300">CURSOR POSITIONS</span>
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] text-slate-400">
-                        <span>Time X1 / X2:</span>
-                        <span>
-                          {(cursorX1 * 100).toFixed(0)}% / {(cursorX2 * 100).toFixed(0)}%
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={cursorX1}
-                        onChange={(e) => setCursorX1(parseFloat(e.target.value))}
-                        className="w-full accent-pink-500 cursor-pointer"
-                      />
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={cursorX2}
-                        onChange={(e) => setCursorX2(parseFloat(e.target.value))}
-                        className="w-full accent-pink-500 cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>

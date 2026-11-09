@@ -17,12 +17,19 @@ interface ComponentPaletteProps {
 interface PaletteItem {
   type: ComponentType;
   label: string;
-  category: 'sources' | 'passives' | 'semiconductors' | 'controls' | 'meters';
+  category: 'sources' | 'passives' | 'semiconductors' | 'controls' | 'meters' | 'sensors';
   hint: string;
   symbolLabel?: string;
 }
 
 const PALETTE_ITEMS: PaletteItem[] = [
+  // Sensors
+  { type: 'photoresistor', label: 'Photoresistor (LDR)', category: 'sensors', hint: 'Light-dependent resistor (Lux)' },
+  { type: 'thermistor', label: 'NTC Thermistor', category: 'sensors', hint: 'Temp-dependent resistor (°C)' },
+  { type: 'pir_sensor', label: 'PIR Motion Sensor', category: 'sensors', hint: 'Infrared motion detector module' },
+  { type: 'temp_sensor', label: 'Analog Temp Sensor (LM35)', category: 'sensors', hint: 'Linear 10mV/°C temperature probe' },
+  { type: 'sound_sensor', label: 'Sound / Mic Sensor', category: 'sensors', hint: 'Acoustic sound sensor module' },
+
   // Sources
   { type: 'dc_source', label: 'DC Voltage Source', category: 'sources', hint: 'Constant DC potential' },
   { type: 'ac_source', label: 'AC Generator', category: 'sources', hint: 'Sine / Square wave source' },
@@ -107,6 +114,7 @@ export const ComponentPalette: React.FC<ComponentPaletteProps> = ({
         <div className="flex gap-1 mt-2.5 overflow-x-auto pb-1 text-[11px] no-scrollbar">
           {[
             { id: 'all', label: 'All' },
+            { id: 'sensors', label: 'Sensors' },
             { id: 'passives', label: 'Passives' },
             { id: 'semiconductors', label: 'Active' },
             { id: 'sources', label: 'Power' },

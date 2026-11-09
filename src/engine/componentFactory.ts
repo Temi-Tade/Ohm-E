@@ -46,11 +46,11 @@ export function createComponent(
         y,
         rotation: 0,
         pins: [
-          { id: `${id}_p`, name: '+', label: '+', x: 40, y: 0 },
-          { id: `${id}_n`, name: '-', label: '-', x: -40, y: 0 },
+          { id: `${id}_p`, name: '+', label: '+', x: -40, y: 0 },
+          { id: `${id}_n`, name: '-', label: '-', x: 40, y: 0 },
         ],
         params: {
-          voltage: 9.0,
+          voltage: 5.0,
           ...customParams,
         },
       };
@@ -434,6 +434,103 @@ export function createComponent(
         ],
         params: {
           resistance: 0.001, // 1mΩ shunt
+          ...customParams,
+        },
+      };
+
+    case 'photoresistor':
+      return {
+        id,
+        type,
+        name: 'Photoresistor (LDR)',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_1`, name: '1', x: -40, y: 0 },
+          { id: `${id}_2`, name: '2', x: 40, y: 0 },
+        ],
+        params: {
+          lux: 250, // 250 lux
+          resistance: 2500, // ~2.5kΩ
+          ...customParams,
+        },
+      };
+
+    case 'thermistor':
+      return {
+        id,
+        type,
+        name: 'NTC Thermistor',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_1`, name: '1', x: -40, y: 0 },
+          { id: `${id}_2`, name: '2', x: 40, y: 0 },
+        ],
+        params: {
+          temperature: 25, // 25°C
+          resistance: 10000, // 10kΩ at 25°C
+          beta: 3950,
+          ...customParams,
+        },
+      };
+
+    case 'pir_sensor':
+      return {
+        id,
+        type,
+        name: 'PIR Motion Sensor',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_vcc`, name: 'VCC', label: '+', x: -40, y: -20 },
+          { id: `${id}_gnd`, name: 'GND', label: '−', x: -40, y: 20 },
+          { id: `${id}_out`, name: 'OUT', label: 'OUT', x: 40, y: 0 },
+        ],
+        params: {
+          motionDetected: false,
+          ...customParams,
+        },
+      };
+
+    case 'temp_sensor':
+      return {
+        id,
+        type,
+        name: 'Analog Temp Sensor (LM35)',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_vcc`, name: 'VCC', label: '+', x: -40, y: -20 },
+          { id: `${id}_gnd`, name: 'GND', label: '−', x: -40, y: 20 },
+          { id: `${id}_out`, name: 'VOUT', label: 'OUT', x: 40, y: 0 },
+        ],
+        params: {
+          temperature: 25, // 25°C
+          ...customParams,
+        },
+      };
+
+    case 'sound_sensor':
+      return {
+        id,
+        type,
+        name: 'Sound Sensor',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_vcc`, name: 'VCC', label: '+', x: -40, y: -20 },
+          { id: `${id}_gnd`, name: 'GND', label: '−', x: -40, y: 20 },
+          { id: `${id}_out`, name: 'OUT', label: 'OUT', x: 40, y: 0 },
+        ],
+        params: {
+          soundLevel: 40,
+          sensitivity: 60,
           ...customParams,
         },
       };

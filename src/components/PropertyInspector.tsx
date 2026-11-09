@@ -26,7 +26,7 @@ interface PropertyInspectorProps {
   onDeleteSelected: () => void;
   onClose: () => void;
   isMobileOpen?: boolean;
-  onAttachProbe?: (channelId: number, pinId: string) => void;
+  onOpenScope?: () => void;
 }
 
 export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
@@ -38,7 +38,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
   onDeleteSelected,
   onClose,
   isMobileOpen = false,
-  onAttachProbe,
+  onOpenScope,
 }) => {
   if (!selectedComponent && !selectedWire) return null;
 
@@ -139,37 +139,17 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
           </div>
         )}
 
-        {/* Quick Oscilloscope Probe Attachment */}
-        {onAttachProbe && (
-          <div className="p-2.5 rounded-lg bg-[#1a1c22] border border-[#262832] space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-[#717684]">
-                Scope Probes
-              </span>
-              <Activity className="w-3.5 h-3.5 text-[#38bdf8]" />
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              <button
-                onClick={() => {
-                  const targetPin = selectedComponent ? selectedComponent.pins[0]?.id : selectedWire?.fromPinId;
-                  if (targetPin) onAttachProbe(0, targetPin);
-                }}
-                className="py-1.5 px-2 rounded bg-[#1e2026] hover:bg-[#252831] active:bg-[#181a20] border border-[#facc15]/30 text-[#facc15] font-mono text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                title="Attach Scope Channel 1 (Yellow) to this node"
-              >
-                Probe CH1
-              </button>
-              <button
-                onClick={() => {
-                  const targetPin = selectedComponent ? selectedComponent.pins[0]?.id : selectedWire?.fromPinId;
-                  if (targetPin) onAttachProbe(1, targetPin);
-                }}
-                className="py-1.5 px-2 rounded bg-[#1e2026] hover:bg-[#252831] active:bg-[#181a20] border border-[#06b6d4]/30 text-[#06b6d4] font-mono text-[11px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
-                title="Attach Scope Channel 2 (Cyan) to this node"
-              >
-                Probe CH2
-              </button>
-            </div>
+        {/* Oscilloscope Waveform Button */}
+        {onOpenScope && (
+          <div className="p-2.5 rounded-lg bg-[#1a1c22] border border-[#262832]">
+            <button
+              onClick={onOpenScope}
+              className="w-full py-2 px-3 rounded-md bg-[#1a2332] hover:bg-[#223045] active:bg-[#151c27] border border-[#2b4162] text-[#38bdf8] text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
+              title="Open Oscilloscope to view waveform across this component's terminals"
+            >
+              <Activity className="w-4 h-4 text-[#38bdf8]" />
+              <span>Inspect Terminal Waveform</span>
+            </button>
           </div>
         )}
 
@@ -842,6 +822,152 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                     className="w-full bg-[#121317] border border-[#2d313b] focus:border-amber-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
                   />
                   <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Hz</span>
+                </div>
+              </div>
+            )}
+
+            {/* Photoresistor (LDR) Controls */}
+            {selectedComponent.type === 'photoresistor' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Ambient Light Level:</span>
+                  <span className="font-mono text-amber-400 font-bold">
+                    {selectedComponent.params.lux ?? 250} Lux
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="10"
+                  value={selectedComponent.params.lux ?? 250}
+                  onChange={(e) =>
+                    onUpdateComponentParams(selectedComponent.id, {
+                      lux: parseInt(e.target.value, 10),
+                    })
+                  }
+                  className="w-full accent-amber-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
+                  <span>0 lx (Dark ~500kΩ)</span>
+                  <span>500 lx</span>
+                  <span>1000 lx (Bright ~1kΩ)</span>
+                </div>
+              </div>
+            )}
+
+            {/* NTC Thermistor Controls */}
+            {selectedComponent.type === 'thermistor' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Sensor Temperature:</span>
+                  <span className="font-mono text-rose-400 font-bold">
+                    {selectedComponent.params.temperature ?? 25} °C
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-20"
+                  max="120"
+                  step="1"
+                  value={selectedComponent.params.temperature ?? 25}
+                  onChange={(e) =>
+                    onUpdateComponentParams(selectedComponent.id, {
+                      temperature: parseInt(e.target.value, 10),
+                    })
+                  }
+                  className="w-full accent-rose-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
+                  <span>-20°C (Cold ~90kΩ)</span>
+                  <span>25°C (10kΩ)</span>
+                  <span>120°C (Hot ~400Ω)</span>
+                </div>
+              </div>
+            )}
+
+            {/* PIR Motion Sensor Controls */}
+            {selectedComponent.type === 'pir_sensor' && (
+              <div className="space-y-2.5 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Motion State:</span>
+                  <span className={`font-mono font-bold ${selectedComponent.params.motionDetected ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {selectedComponent.params.motionDetected ? 'DETECTED' : 'IDLE'}
+                  </span>
+                </div>
+                <button
+                  onClick={() =>
+                    onUpdateComponentParams(selectedComponent.id, {
+                      motionDetected: !selectedComponent.params.motionDetected,
+                    })
+                  }
+                  className={`w-full py-2 px-3 rounded-lg font-medium text-xs border transition-colors cursor-pointer ${
+                    selectedComponent.params.motionDetected
+                      ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300'
+                      : 'bg-[#20232a] hover:bg-[#282c35] border-[#2e323e] text-[#cfd3dd]'
+                  }`}
+                >
+                  {selectedComponent.params.motionDetected ? 'Active (Click to Reset)' : 'Trigger Motion Pulse'}
+                </button>
+              </div>
+            )}
+
+            {/* Analog Temp Sensor (LM35) Controls */}
+            {selectedComponent.type === 'temp_sensor' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Environment Temp:</span>
+                  <span className="font-mono text-rose-400 font-bold">
+                    {selectedComponent.params.temperature ?? 25} °C
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-40"
+                  max="125"
+                  step="1"
+                  value={selectedComponent.params.temperature ?? 25}
+                  onChange={(e) =>
+                    onUpdateComponentParams(selectedComponent.id, {
+                      temperature: parseInt(e.target.value, 10),
+                    })
+                  }
+                  className="w-full accent-rose-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
+                  <span>-40°C (100mV)</span>
+                  <span>25°C (750mV)</span>
+                  <span>125°C (1.75V)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Sound Sensor Controls */}
+            {selectedComponent.type === 'sound_sensor' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Acoustic Level:</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {selectedComponent.params.soundLevel ?? 40} dB
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="20"
+                  max="110"
+                  step="2"
+                  value={selectedComponent.params.soundLevel ?? 40}
+                  onChange={(e) =>
+                    onUpdateComponentParams(selectedComponent.id, {
+                      soundLevel: parseInt(e.target.value, 10),
+                    })
+                  }
+                  className="w-full accent-cyan-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
+                  <span>20 dB (Whisper)</span>
+                  <span>60 dB (Normal)</span>
+                  <span>110 dB (Loud Clap)</span>
                 </div>
               </div>
             )}

@@ -9,17 +9,52 @@ import { CircuitComponent } from '../types/circuit';
 interface SymbolProps {
   component: CircuitComponent;
   isSelected: boolean;
+  isRunning?: boolean;
   onToggleSwitch?: (component: CircuitComponent) => void;
   onWiperChange?: (component: CircuitComponent, newWiper: number) => void;
 }
 
+interface UprightTextProps extends React.SVGProps<SVGTextElement> {
+  x: number;
+  y: number;
+  rot?: number;
+}
+
+/**
+ * Text that can be oriented vertically (up to 90° clockwise or anticlockwise),
+ * but never flipped upside-down (180° is un-flipped to stay upright).
+ */
+export const UprightText: React.FC<UprightTextProps> = ({
+  x,
+  y,
+  rot = 0,
+  children,
+  ...props
+}) => {
+  const normalizedRot = ((rot % 360) + 360) % 360;
+  // If inverted/upside-down (180 deg), flip 180 deg around (x, y) to keep text upright
+  const flipAngle = normalizedRot === 180 ? 180 : 0;
+  return (
+    <text
+      x={x}
+      y={y}
+      transform={flipAngle ? `rotate(${flipAngle}, ${x}, ${y})` : undefined}
+      {...props}
+    >
+      {children}
+    </text>
+  );
+};
+
 export const SchematicSymbol: React.FC<SymbolProps> = ({
   component,
   isSelected,
+  isRunning = true,
   onToggleSwitch,
   onWiperChange,
 }) => {
   const { type, params, state } = component;
+  const rot = component.rotation || 0;
   const strokeColor = isSelected ? '#38bdf8' : '#e2e8f0';
   const strokeWidth = isSelected ? 2.5 : 2;
 
@@ -37,14 +72,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             strokeLinecap="round"
           />
           {/* Label */}
-          <text
-            x="0"
-            y="-16"
+          <UprightText
+            x={0}
+            y={-16}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-400 text-[11px] font-mono pointer-events-none select-none font-medium"
           >
             {formatResistance(params.resistance ?? 1000)}
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -123,14 +159,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
               window.addEventListener('mouseup', onUp);
             }}
           />
-          <text
-            x="0"
-            y="-22"
+          <UprightText
+            x={0}
+            y={-22}
+            rot={rot}
             textAnchor="middle"
             className="fill-amber-400 text-[10px] font-mono pointer-events-none select-none font-bold"
           >
             {Math.round(wiper * 100)}% ({formatResistance(params.resistance ?? 10000)})
-          </text>
+          </UprightText>
         </g>
       );
     }
@@ -144,14 +181,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           {/* Parallel plates */}
           <line x1="-8" y1="-18" x2="-8" y2="18" stroke={strokeColor} strokeWidth={2.5} strokeLinecap="round" />
           <line x1="8" y1="-18" x2="8" y2="18" stroke={strokeColor} strokeWidth={2.5} strokeLinecap="round" />
-          <text
-            x="0"
-            y="-22"
+          <UprightText
+            x={0}
+            y={-22}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-400 text-[11px] font-mono pointer-events-none select-none font-medium"
           >
             {formatCapacitance(params.capacitance ?? 10e-6)}
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -166,14 +204,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             strokeWidth={strokeWidth}
           />
           <line x1="24" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text
-            x="0"
-            y="-16"
+          <UprightText
+            x={0}
+            y={-16}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-400 text-[11px] font-mono pointer-events-none select-none font-medium"
           >
             {formatInductance(params.inductance ?? 10e-3)}
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -183,20 +222,21 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           {/* Leads */}
           <line x1="-40" y1="0" x2="-8" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="8" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-          {/* Long line (+) on right (x=8), short thicker line (-) on left (x=-8) */}
-          <line x1="8" y1="-18" x2="8" y2="18" stroke={strokeColor} strokeWidth={2.5} strokeLinecap="round" />
-          <line x1="-8" y1="-10" x2="-8" y2="10" stroke={strokeColor} strokeWidth={4} strokeLinecap="round" />
-          {/* + and - indicators */}
-          <text x="18" y="-10" className="fill-emerald-400 text-[12px] font-bold select-none">+</text>
-          <text x="-24" y="-8" className="fill-rose-400 text-[13px] font-bold select-none">−</text>
-          <text
-            x="0"
-            y="-22"
+          {/* Long line (+) on left (x=-8), short thicker line (-) on right (x=8) */}
+          <line x1="-8" y1="-18" x2="-8" y2="18" stroke={strokeColor} strokeWidth={2.5} strokeLinecap="round" />
+          <line x1="8" y1="-10" x2="8" y2="10" stroke={strokeColor} strokeWidth={4} strokeLinecap="round" />
+          {/* + and - indicators: + on left hand side, - on right */}
+          <UprightText x={-22} y={-10} rot={rot} className="fill-emerald-400 text-[12px] font-bold select-none">+</UprightText>
+          <UprightText x={18} y={-8} rot={rot} className="fill-rose-400 text-[13px] font-bold select-none">−</UprightText>
+          <UprightText
+            x={0}
+            y={-22}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-300 text-[11px] font-mono pointer-events-none select-none font-bold"
           >
-            {params.voltage ?? 9}V
-          </text>
+            {params.voltage ?? 5}V
+          </UprightText>
         </g>
       );
 
@@ -214,14 +254,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             strokeWidth="2.5"
             strokeLinecap="round"
           />
-          <text
-            x="0"
-            y="-25"
+          <UprightText
+            x={0}
+            y={-25}
+            rot={rot}
             textAnchor="middle"
             className="fill-cyan-400 text-[11px] font-mono pointer-events-none select-none font-semibold"
           >
             {params.voltage ?? 5}Vpk {params.frequency ?? 50}Hz
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -238,14 +279,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             stroke="#a855f7"
             strokeWidth="2"
           />
-          <text
-            x="0"
-            y="-22"
+          <UprightText
+            x={0}
+            y={-22}
+            rot={rot}
             textAnchor="middle"
             className="fill-purple-400 text-[10px] font-mono pointer-events-none select-none font-semibold"
           >
             CLK {params.frequency ?? 10}Hz
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -258,14 +300,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-16" y1="0" x2="16" y2="0" stroke={strokeColor} strokeWidth="2.5" strokeLinecap="round" />
           <line x1="-10" y1="6" x2="10" y2="6" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" />
           <line x1="-4" y1="12" x2="4" y2="12" stroke={strokeColor} strokeWidth="1.5" strokeLinecap="round" />
-          <text
-            x="0"
-            y="24"
+          <UprightText
+            x={0}
+            y={24}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-500 text-[9px] font-mono pointer-events-none select-none font-bold"
           >
             GND
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -284,14 +327,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           />
           {/* Cathode bar at 14 */}
           <line x1="14" y1="-14" x2="14" y2="14" stroke={strokeColor} strokeWidth="3" strokeLinecap="round" />
-          <text
-            x="0"
-            y="-18"
+          <UprightText
+            x={0}
+            y={-18}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-400 text-[10px] font-mono pointer-events-none select-none"
           >
             1N4148
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -315,117 +359,83 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             strokeWidth="2.5"
             strokeLinecap="round"
           />
-          <text
-            x="0"
-            y="-18"
+          <UprightText
+            x={0}
+            y={-18}
+            rot={rot}
             textAnchor="middle"
             className="fill-amber-400 text-[10px] font-mono pointer-events-none select-none font-bold"
           >
             {params.zenerVoltage ?? 5.1}V
-          </text>
+          </UprightText>
         </g>
       );
 
     case 'led': {
       const colorKey = params.ledColor || 'red';
-      const colorMap: Record<string, { main: string; glow: string; text: string }> = {
-        red: { main: '#ef4444', glow: '#f87171', text: '#fca5a5' },
-        green: { main: '#22c55e', glow: '#4ade80', text: '#86efac' },
-        blue: { main: '#3b82f6', glow: '#60a5fa', text: '#93c5fd' },
-        yellow: { main: '#eab308', glow: '#facc15', text: '#fef08a' },
-        white: { main: '#f8fafc', glow: '#ffffff', text: '#ffffff' },
+      const colorHexMap = {
+        red: '#ef4444',
+        green: '#10b981',
+        blue: '#3b82f6',
+        yellow: '#eab308',
+        white: '#f8fafc',
       };
-      const colors = colorMap[colorKey] ?? colorMap.red;
-      const brightness = state?.brightness ?? 0;
+      const litColor = colorHexMap[colorKey];
+      const brightness = state?.brightness || 0;
       const isBlown = state?.isBlown;
-      const isLit = brightness > 0.05 && !isBlown;
+      const isLit = isRunning && brightness > 0.05 && !isBlown;
 
       return (
         <g className="select-none">
-          {/* Multi-tier Luminous LED Glow */}
-          {isLit && (
-            <>
-              {/* Outer soft ambient aura */}
-              <circle
-                cx="0"
-                cy="0"
-                r={22 + brightness * 20}
-                fill={colors.glow}
-                opacity={Math.min(0.18 + brightness * 0.35, 0.65)}
-                className="pointer-events-none transition-all duration-75"
-                filter="blur(8px)"
-              />
-              {/* Inner energetic radiance */}
-              <circle
-                cx="0"
-                cy="0"
-                r={12 + brightness * 10}
-                fill={colors.main}
-                opacity={Math.min(0.3 + brightness * 0.45, 0.85)}
-                className="pointer-events-none transition-all duration-75"
-                filter="blur(3px)"
-              />
-              {/* Hot center photon flare */}
-              <circle
-                cx="0"
-                cy="0"
-                r={3 + brightness * 3}
-                fill="#ffffff"
-                opacity={Math.min(0.6 + brightness * 0.4, 0.95)}
-                className="pointer-events-none transition-all duration-75"
-              />
-            </>
-          )}
-
-          {/* Lead Wires */}
           <line x1="-40" y1="0" x2="-14" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="14" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
 
-          {/* Diode Triangle Body */}
+          {/* Glowing Aura if turned on */}
+          {isLit && (
+            <circle
+              cx="0"
+              cy="0"
+              r={16 + brightness * 12}
+              fill={litColor}
+              opacity={brightness * 0.45}
+              filter="blur(4px)"
+              className="pointer-events-none"
+            />
+          )}
+
+          {/* Diode body */}
           <polygon
             points="-14,-14 -14,14 14,0"
-            fill={isBlown ? '#334155' : isLit ? colors.main : '#1e293b'}
-            stroke={isLit ? colors.glow : strokeColor}
-            strokeWidth={isLit ? 2 : strokeWidth}
+            fill={isBlown ? '#334155' : isLit ? litColor : strokeColor}
+            stroke={isBlown ? '#ef4444' : strokeColor}
+            strokeWidth={1}
             strokeLinejoin="round"
-            className="transition-colors duration-100"
           />
-
-          {/* Cathode Bar */}
           <line
             x1="14"
             y1="-14"
             x2="14"
             y2="14"
-            stroke={isLit ? colors.glow : strokeColor}
-            strokeWidth={isLit ? 3 : 2.5}
+            stroke={isBlown ? '#ef4444' : strokeColor}
+            strokeWidth="3"
             strokeLinecap="round"
           />
 
           {/* Light emission arrows */}
-          <g
-            stroke={isLit ? colors.glow : '#64748b'}
-            strokeWidth={isLit ? 2 : 1.5}
-            strokeLinecap="round"
-            className="transition-all duration-100"
-          >
-            <path d="M 0 -16 L 8 -25 M 5 -25 L 8 -25 L 8 -22" />
-            <path d="M 8 -16 L 16 -25 M 13 -25 L 16 -25 L 16 -22" />
-          </g>
+          {!isBlown && (
+            <>
+              <line x1="2" y1="-14" x2="10" y2="-22" stroke={isLit ? litColor : '#94a3b8'} strokeWidth="1.5" />
+              <polygon points="10,-22 6,-20 8,-17" fill={isLit ? litColor : '#94a3b8'} />
+              <line x1="8" y1="-10" x2="16" y2="-18" stroke={isLit ? litColor : '#94a3b8'} strokeWidth="1.5" />
+              <polygon points="16,-18 12,-16 14,-13" fill={isLit ? litColor : '#94a3b8'} />
+            </>
+          )}
 
-          {/* Subtext info */}
-          {isBlown ? (
-            <text x="0" y="-30" textAnchor="middle" className="fill-rose-500 text-[10px] font-bold font-mono">
+          {/* Subtext info: only show warning if blown, no LED color or LED text label */}
+          {isBlown && (
+            <UprightText x={0} y={-30} rot={rot} textAnchor="middle" className="fill-rose-500 text-[10px] font-bold font-mono">
               💥 BLOWN ({formatCurrent(state?.current ?? 0)})
-            </text>
-          ) : isLit ? (
-            <text x="0" y="-30" textAnchor="middle" className="fill-emerald-400 text-[10px] font-mono font-semibold">
-              LED ({colorKey}) {((state?.current ?? 0) * 1000).toFixed(1)}mA
-            </text>
-          ) : (
-            <text x="0" y="-30" textAnchor="middle" className="fill-slate-400 text-[10px] font-mono">
-              LED ({colorKey})
-            </text>
+            </UprightText>
           )}
         </g>
       );
@@ -447,9 +457,9 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="18" y1="22" x2="20" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
           {/* Arrow pointing away from Base on Emitter */}
           <polygon points="12,14 18,22 8,20" fill={strokeColor} />
-          <text x="-4" y="-32" textAnchor="middle" className="fill-slate-400 text-[9px] font-mono">
+          <UprightText x={-4} y={-32} rot={rot} textAnchor="middle" className="fill-slate-400 text-[9px] font-mono">
             NPN (β={params.beta ?? 100})
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -466,9 +476,9 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           {/* Collector slant */}
           <line x1="-12" y1="8" x2="18" y2="22" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="18" y1="22" x2="20" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x="-4" y="-32" textAnchor="middle" className="fill-slate-400 text-[9px] font-mono">
+          <UprightText x={-4} y={-32} rot={rot} textAnchor="middle" className="fill-slate-400 text-[9px] font-mono">
             PNP (β={params.beta ?? 100})
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -493,9 +503,16 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="6" y1="0" x2="6" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
           <polygon points="-5,0 0,-4 0,4" fill={strokeColor} />
-          <text x="-4" y="-32" textAnchor="middle" className="fill-cyan-400 text-[9px] font-mono font-medium">
-            NMOS (Vth={params.vth ?? 2}V)
-          </text>
+          {/* Terminal Labels: Only G, D, S */}
+          <UprightText x={-30} y={-6} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+            G
+          </UprightText>
+          <UprightText x={10} y={-26} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+            D
+          </UprightText>
+          <UprightText x={10} y={28} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+            S
+          </UprightText>
         </g>
       );
 
@@ -519,9 +536,16 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="6" y1="0" x2="6" y2="-11" stroke={strokeColor} strokeWidth={strokeWidth} />
           <polygon points="5,0 0,-4 0,4" fill={strokeColor} />
-          <text x="-4" y="-32" textAnchor="middle" className="fill-pink-400 text-[9px] font-mono font-medium">
-            PMOS (Vth={params.vth ?? -2}V)
-          </text>
+          {/* Terminal Labels: Only G, D, S */}
+          <UprightText x={-30} y={-6} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+            G
+          </UprightText>
+          <UprightText x={10} y={-26} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+            S
+          </UprightText>
+          <UprightText x={10} y={28} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+            D
+          </UprightText>
         </g>
       );
 
@@ -538,15 +562,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           />
           {/* IN+ lead at (-40, -20) to (-30, -20) */}
           <line x1="-40" y1="-20" x2="-30" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x="-24" y="-16" className="fill-slate-400 text-[12px] font-bold">+</text>
+          <UprightText x={-24} y={-16} rot={rot} className="fill-slate-400 text-[12px] font-bold">+</UprightText>
           {/* IN- lead at (-40, 20) to (-30, 20) */}
           <line x1="-40" y1="20" x2="-30" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x="-24" y="24" className="fill-slate-400 text-[14px] font-bold">−</text>
+          <UprightText x={-24} y={24} rot={rot} className="fill-slate-400 text-[14px] font-bold">−</UprightText>
           {/* OUT lead at (30, 0) to (40, 0) */}
           <line x1="30" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <text x="-4" y="4" textAnchor="middle" className="fill-slate-400 text-[10px] font-mono">
+          <UprightText x={-4} y={4} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono">
             OPAMP
-          </text>
+          </UprightText>
         </g>
       );
 
@@ -583,14 +607,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             strokeWidth="1"
             className="group-hover:scale-105 transition-transform"
           />
-          <text
-            x="0"
-            y="-19"
+          <UprightText
+            x={0}
+            y={-19}
+            rot={rot}
             textAnchor="middle"
             className={`text-[9px] font-bold font-mono ${isClosed ? 'fill-emerald-300' : 'fill-rose-300'}`}
           >
             {isClosed ? 'CLOSED' : 'OPEN'}
-          </text>
+          </UprightText>
         </g>
       );
     }
@@ -621,14 +646,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             stroke={strokeColor}
             strokeWidth="2"
           />
-          <text
-            x="0"
-            y="-22"
+          <UprightText
+            x={0}
+            y={-22}
+            rot={rot}
             textAnchor="middle"
             className="fill-slate-400 text-[9px] font-mono pointer-events-none"
           >
             PUSH
-          </text>
+          </UprightText>
         </g>
       );
     }
@@ -648,9 +674,9 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
               <path d="M 23 -14 A 18 18 0 0 1 23 14" fill="none" stroke="#eab308" strokeWidth="1.5" strokeLinecap="round" />
             </>
           )}
-          <text x="0" y="-22" textAnchor="middle" className="fill-amber-400 text-[10px] font-mono font-bold">
+          <UprightText x={0} y={-22} rot={rot} textAnchor="middle" className="fill-amber-400 text-[10px] font-mono font-bold">
             BUZZER
-          </text>
+          </UprightText>
         </g>
       );
     }
@@ -662,12 +688,12 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-40" y1="0" x2="-20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="20" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <circle cx="0" cy="0" r="20" fill="#0f172a" stroke="#06b6d4" strokeWidth={strokeWidth} />
-          <text x="0" y="5" textAnchor="middle" className="fill-cyan-400 text-[16px] font-bold font-mono">
+          <UprightText x={0} y={5} rot={rot} textAnchor="middle" className="fill-cyan-400 text-[16px] font-bold font-mono">
             V
-          </text>
-          <text x="0" y="-24" textAnchor="middle" className="fill-cyan-300 text-[11px] font-mono font-bold">
+          </UprightText>
+          <UprightText x={0} y={-24} rot={rot} textAnchor="middle" className="fill-cyan-300 text-[11px] font-mono font-bold">
             {formatVoltage(vDrop)}
-          </text>
+          </UprightText>
         </g>
       );
     }
@@ -679,12 +705,231 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-40" y1="0" x2="-20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="20" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <circle cx="0" cy="0" r="20" fill="#0f172a" stroke="#10b981" strokeWidth={strokeWidth} />
-          <text x="0" y="5" textAnchor="middle" className="fill-emerald-400 text-[16px] font-bold font-mono">
+          <UprightText x={0} y={5} rot={rot} textAnchor="middle" className="fill-emerald-400 text-[16px] font-bold font-mono">
             A
-          </text>
-          <text x="0" y="-24" textAnchor="middle" className="fill-emerald-300 text-[11px] font-mono font-bold">
+          </UprightText>
+          <UprightText x={0} y={-24} rot={rot} textAnchor="middle" className="fill-emerald-300 text-[11px] font-mono font-bold">
             {formatCurrent(iVal)}
-          </text>
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'photoresistor': {
+      const lux = params.lux ?? 250;
+      const calcR = Math.max(500 + 500000 / (lux + 1), 10);
+      return (
+        <g className="select-none">
+          {/* Enclosing circle */}
+          <circle cx="0" cy="0" r="24" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} strokeDasharray="3,3" />
+          {/* Resistor zigzag */}
+          <path
+            d="M -40 0 L -20 0 L -15 -8 L -9 8 L -3 -8 L 3 8 L 9 -8 L 15 8 L 20 0 L 40 0"
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinejoin="round"
+          />
+          {/* Light rays pointing inwards from top-left */}
+          <line x1="-22" y1="-26" x2="-14" y2="-16" stroke="#fbbf24" strokeWidth="1.8" />
+          <polygon points="-12,-14 -16,-19 -18,-15" fill="#fbbf24" />
+          <line x1="-12" y1="-30" x2="-4" y2="-20" stroke="#fbbf24" strokeWidth="1.8" />
+          <polygon points="-2,-18 -6,-23 -8,-19" fill="#fbbf24" />
+          <UprightText
+            x={0}
+            y={-28}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-amber-400 text-[10px] font-mono pointer-events-none select-none font-semibold"
+          >
+            {lux} lx ({formatResistance(calcR)})
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'thermistor': {
+      const tempC = params.temperature ?? 25;
+      const T = tempC + 273.15;
+      const T0 = 298.15;
+      const R0 = params.resistance ?? 10000;
+      const B = params.beta ?? 3950;
+      const calcR = Math.min(Math.max(R0 * Math.exp(B * (1 / T - 1 / T0)), 10), 1e7);
+      return (
+        <g className="select-none">
+          {/* Resistor zigzag */}
+          <path
+            d="M -40 0 L -24 0 L -18 -8 L -10 8 L -2 -8 L 6 8 L 14 -8 L 20 8 L 24 0 L 40 0"
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinejoin="round"
+          />
+          {/* Thermistor diagonal slash with foot (-t°) */}
+          <line x1="-18" y1="16" x2="18" y2="-16" stroke="#f43f5e" strokeWidth="2" strokeLinecap="round" />
+          <line x1="-24" y1="16" x2="-18" y2="16" stroke="#f43f5e" strokeWidth="2" strokeLinecap="round" />
+          <UprightText
+            x={0}
+            y={-22}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-rose-400 text-[10px] font-mono pointer-events-none select-none font-semibold"
+          >
+            {tempC}°C ({formatResistance(calcR)})
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'pir_sensor': {
+      const isMotion = params.motionDetected ?? false;
+      return (
+        <g className="select-none">
+          {/* Main Sensor Module Body */}
+          <rect
+            x="-28"
+            y="-28"
+            width="56"
+            height="56"
+            rx="6"
+            fill="#0f172a"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+          {/* Left supply leads (VCC, GND) */}
+          <line x1="-40" y1="-20" x2="-28" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-28" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Right output lead (OUT) */}
+          <line x1="28" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+
+          {/* PIR Fresnel Dome graphic */}
+          <circle cx="2" cy="0" r="14" fill="#1e293b" stroke={strokeColor} strokeWidth="1.5" />
+          <path d="M -5 -8 Q 2 -12 9 -8" fill="none" stroke="#64748b" strokeWidth="1.2" />
+          <path d="M -8 0 Q 2 -3 12 0" fill="none" stroke="#64748b" strokeWidth="1.2" />
+          <path d="M -5 8 Q 2 12 9 8" fill="none" stroke="#64748b" strokeWidth="1.2" />
+
+          {/* Indicator LED */}
+          <circle
+            cx="18"
+            cy="-18"
+            r="3"
+            fill={isMotion ? '#10b981' : '#334155'}
+            stroke={isMotion ? '#34d399' : '#475569'}
+            strokeWidth="1"
+          />
+
+          {/* Terminal labels */}
+          <UprightText x={-20} y={-16} rot={rot} className="fill-emerald-400 text-[9px] font-mono font-bold">+</UprightText>
+          <UprightText x={-20} y={23} rot={rot} className="fill-rose-400 text-[10px] font-mono font-bold">−</UprightText>
+          <UprightText x={14} y={3} rot={rot} textAnchor="middle" className="fill-sky-400 text-[8px] font-mono font-bold">OUT</UprightText>
+
+          <UprightText
+            x={0}
+            y={-32}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-sky-300 text-[9px] font-mono pointer-events-none select-none font-bold"
+          >
+            PIR {isMotion ? '• ACTIVE' : ''}
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'temp_sensor': {
+      const tempC = params.temperature ?? 25;
+      return (
+        <g className="select-none">
+          {/* Sensor IC Body */}
+          <rect
+            x="-28"
+            y="-28"
+            width="56"
+            height="56"
+            rx="6"
+            fill="#0f172a"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+          {/* Leads */}
+          <line x1="-40" y1="-20" x2="-28" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-28" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+
+          {/* Thermometer icon inside */}
+          <rect x="-4" y="-12" width="6" height="16" rx="3" fill="#334155" stroke="#94a3b8" strokeWidth="1.2" />
+          <circle cx="-1" cy="6" r="5" fill="#f43f5e" />
+          <line x1="-1" y1="-6" x2="-1" y2="4" stroke="#f43f5e" strokeWidth="2.5" />
+
+          {/* Terminal labels */}
+          <UprightText x={-20} y={-16} rot={rot} className="fill-emerald-400 text-[9px] font-mono font-bold">+</UprightText>
+          <UprightText x={-20} y={23} rot={rot} className="fill-rose-400 text-[10px] font-mono font-bold">−</UprightText>
+          <UprightText x={15} y={3} rot={rot} textAnchor="middle" className="fill-sky-400 text-[8px] font-mono font-bold">OUT</UprightText>
+
+          <UprightText
+            x={0}
+            y={-32}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-rose-300 text-[9px] font-mono pointer-events-none select-none font-bold"
+          >
+            LM35 {tempC}°C
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'sound_sensor': {
+      const soundLevel = params.soundLevel ?? 40;
+      const sensitivity = params.sensitivity ?? 60;
+      const isTriggered = soundLevel >= sensitivity;
+      return (
+        <g className="select-none">
+          {/* Sensor Body */}
+          <rect
+            x="-28"
+            y="-28"
+            width="56"
+            height="56"
+            rx="6"
+            fill="#0f172a"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+          />
+          {/* Leads */}
+          <line x1="-40" y1="-20" x2="-28" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-28" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+
+          {/* Microphone element */}
+          <circle cx="-2" cy="0" r="10" fill="#1e293b" stroke={strokeColor} strokeWidth="1.5" />
+          <path d="M 10 -6 Q 16 0 10 6" fill="none" stroke={isTriggered ? '#38bdf8' : '#64748b'} strokeWidth="1.5" />
+          <path d="M 13 -9 Q 21 0 13 9" fill="none" stroke={isTriggered ? '#38bdf8' : '#475569'} strokeWidth="1.2" />
+
+          {/* Indicator LED */}
+          <circle
+            cx="18"
+            cy="-18"
+            r="3"
+            fill={isTriggered ? '#38bdf8' : '#334155'}
+            stroke={isTriggered ? '#7dd3fc' : '#475569'}
+            strokeWidth="1"
+          />
+
+          {/* Terminal labels */}
+          <UprightText x={-20} y={-16} rot={rot} className="fill-emerald-400 text-[9px] font-mono font-bold">+</UprightText>
+          <UprightText x={-20} y={23} rot={rot} className="fill-rose-400 text-[10px] font-mono font-bold">−</UprightText>
+          <UprightText x={14} y={3} rot={rot} textAnchor="middle" className="fill-sky-400 text-[8px] font-mono font-bold">OUT</UprightText>
+
+          <UprightText
+            x={0}
+            y={-32}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-cyan-300 text-[9px] font-mono pointer-events-none select-none font-bold"
+          >
+            MIC {soundLevel}dB
+          </UprightText>
         </g>
       );
     }
@@ -702,29 +947,28 @@ export function formatResistance(val: number): string {
 
 export function formatCapacitance(val: number): string {
   if (val >= 1e-3) return `${(val * 1e3).toFixed(1)}mF`;
-  if (val >= 1e-6) return `${(val * 1e6).toFixed(val * 1e6 < 10 ? 1 : 0)}µF`;
-  if (val >= 1e-9) return `${(val * 1e9).toFixed(0)}nF`;
-  return `${(val * 1e12).toFixed(0)}pF`;
+  if (val >= 1e-6) return `${(val * 1e6).toFixed(1)}µF`;
+  if (val >= 1e-9) return `${(val * 1e9).toFixed(1)}nF`;
+  return `${Math.round(val * 1e12)}pF`;
 }
 
 export function formatInductance(val: number): string {
   if (val >= 1) return `${val.toFixed(1)}H`;
-  if (val >= 1e-3) return `${(val * 1e3).toFixed(val * 1e3 < 10 ? 1 : 0)}mH`;
-  return `${(val * 1e6).toFixed(0)}µH`;
+  if (val >= 1e-3) return `${(val * 1e3).toFixed(1)}mH`;
+  return `${(val * 1e6).toFixed(1)}µH`;
 }
 
-export function formatVoltage(v: number): string {
-  const abs = Math.abs(v);
-  if (abs >= 1000) return `${(v / 1000).toFixed(2)}kV`;
-  if (abs >= 1) return `${v.toFixed(2)}V`;
-  if (abs >= 1e-3) return `${(v * 1000).toFixed(1)}mV`;
-  return `${(v * 1e6).toFixed(0)}µV`;
+export function formatVoltage(val: number): string {
+  if (Math.abs(val) >= 1000) return `${(val / 1000).toFixed(2)}kV`;
+  if (Math.abs(val) >= 1) return `${val.toFixed(2)}V`;
+  if (Math.abs(val) >= 1e-3) return `${(val * 1e3).toFixed(1)}mV`;
+  return `${(val * 1e6).toFixed(1)}µV`;
 }
 
-export function formatCurrent(i: number): string {
-  const abs = Math.abs(i);
-  if (abs >= 1) return `${i.toFixed(2)}A`;
-  if (abs >= 1e-3) return `${(i * 1000).toFixed(2)}mA`;
-  if (abs >= 1e-6) return `${(i * 1e6).toFixed(1)}µA`;
-  return `${(i * 1e9).toFixed(0)}nA`;
+export function formatCurrent(val: number): string {
+  const abs = Math.abs(val);
+  if (abs >= 1) return `${val.toFixed(2)}A`;
+  if (abs >= 1e-3) return `${(val * 1e3).toFixed(1)}mA`;
+  if (abs >= 1e-6) return `${(val * 1e6).toFixed(1)}µA`;
+  return `${(val * 1e9).toFixed(1)}nA`;
 }

@@ -13,10 +13,9 @@ export interface CircuitPreset {
   category: string;
   components: CircuitComponent[];
   wires: Wire[];
-  defaultScopeChannels?: {
+  defaultScope?: {
     timebase?: number;
-    channel1?: { pinId: string; enabled?: boolean; voltsPerDiv?: number; offsetY?: number };
-    channel2?: { pinId: string; enabled?: boolean; voltsPerDiv?: number; offsetY?: number };
+    voltsPerDiv?: number;
   };
 }
 
@@ -54,7 +53,7 @@ export function getPresetCircuits(): CircuitPreset[] {
   ];
 
   // 3. Interactive LED Switch Circuit
-  const ledBattery = createComponent('dc_source', 200, 300, { voltage: 9 });
+  const ledBattery = createComponent('dc_source', 200, 300, { voltage: 5 });
   const ledSwitch = createComponent('switch', 360, 240, { closed: true });
   const ledResistor = createComponent('resistor', 500, 240, { resistance: 330 });
   const ledComp = createComponent('led', 640, 320, { forwardVoltage: 2.0, ledColor: 'red', maxCurrent: 0.035 });
@@ -144,10 +143,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       category: 'Filters',
       components: [rcSource, rcResistor, rcCapacitor, rcGround1, rcGround2],
       wires: rcWires,
-      defaultScopeChannels: {
+      defaultScope: {
         timebase: 0.002, // 2ms/div (total span 20ms = 2 full cycles of 100Hz)
-        channel1: { pinId: rcSource.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
-        channel2: { pinId: rcCapacitor.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
+        voltsPerDiv: 2.0,
       },
     },
     {
@@ -157,10 +155,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       category: 'Oscillations',
       components: [rlcClock, rlcResistor, rlcInductor, rlcCapacitor, rlcGnd1, rlcGnd2],
       wires: rlcWires,
-      defaultScopeChannels: {
+      defaultScope: {
         timebase: 0.001, // 1ms/div
-        channel1: { pinId: rlcClock.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
-        channel2: { pinId: rlcCapacitor.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
+        voltsPerDiv: 2.0,
       },
     },
     {
@@ -170,10 +167,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       category: 'Basics',
       components: [ledBattery, ledSwitch, ledResistor, ledComp, ledGnd1, ledGnd2],
       wires: ledWires,
-      defaultScopeChannels: {
+      defaultScope: {
         timebase: 0.01,
-        channel1: { pinId: ledSwitch.pins[1].id, enabled: true, voltsPerDiv: 5.0 },
-        channel2: { pinId: ledComp.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
+        voltsPerDiv: 5.0,
       },
     },
     {
@@ -183,10 +179,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       category: 'Basics',
       components: [potSource, potComp, potVoltmeter, potGnd1, potGnd2, potGnd3],
       wires: potWires,
-      defaultScopeChannels: {
+      defaultScope: {
         timebase: 0.02,
-        channel1: { pinId: potSource.pins[0].id, enabled: true, voltsPerDiv: 5.0 },
-        channel2: { pinId: potComp.pins[2].id, enabled: true, voltsPerDiv: 5.0 },
+        voltsPerDiv: 5.0,
       },
     },
     {
@@ -196,10 +191,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       category: 'Power',
       components: [brSource, brD1, brD2, brD3, brD4, brCap, brRes, brGnd],
       wires: brWires,
-      defaultScopeChannels: {
+      defaultScope: {
         timebase: 0.005,
-        channel1: { pinId: brSource.pins[0].id, enabled: true, voltsPerDiv: 5.0 },
-        channel2: { pinId: brCap.pins[0].id, enabled: true, voltsPerDiv: 5.0 },
+        voltsPerDiv: 5.0,
       },
     },
     {
@@ -209,10 +203,9 @@ export function getPresetCircuits(): CircuitPreset[] {
       category: 'Transistors',
       components: [bjtVcc, bjtClock, bjtRb, bjtNpn, bjtRc, bjtLed, bjtGnd1, bjtGnd2],
       wires: bjtWires,
-      defaultScopeChannels: {
+      defaultScope: {
         timebase: 0.1,
-        channel1: { pinId: bjtClock.pins[0].id, enabled: true, voltsPerDiv: 2.0 },
-        channel2: { pinId: bjtNpn.pins[1].id, enabled: true, voltsPerDiv: 5.0 },
+        voltsPerDiv: 5.0,
       },
     },
   ];
