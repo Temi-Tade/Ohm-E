@@ -207,11 +207,13 @@ export class CircuitSimulator {
   private prevCapacitorVoltages = new Map<string, number>();
   private prevInductorCurrents = new Map<string, number>();
   private prevDiodeVoltages = new Map<string, number>();
+  private prevNodeVoltages: number[] = [];
 
   public reset() {
     this.prevCapacitorVoltages.clear();
     this.prevInductorCurrents.clear();
     this.prevDiodeVoltages.clear();
+    this.prevNodeVoltages = [];
   }
 
   /**
@@ -238,10 +240,11 @@ export class CircuitSimulator {
       resistance?: number; // internal series resistance
     }
 
-    // Identify non-linear components
-    // Iteration loop for non-linear convergence (up to 4 iterations)
-    let nodeVoltages = new Array(numNodes).fill(0);
-    const MAX_ITERS = 4;
+    // Initialize node voltages: carry over from previous step if topology is unchanged
+    let nodeVoltages = (this.prevNodeVoltages && this.prevNodeVoltages.length === numNodes)
+      ? [...this.prevNodeVoltages]
+      : new Array(numNodes).fill(0);
+    const MAX_ITERS = 25;
 
     for (let iter = 0; iter < MAX_ITERS; iter++) {
       const voltageBranches: VoltageBranch[] = [];
@@ -516,29 +519,32 @@ export class CircuitSimulator {
             const vk = nodeVoltages[nk] ?? 0;
             const vd = va - vk;
 
-            const vf = comp.type === 'led' ? (comp.params.forwardVoltage ?? 2.0) : (comp.params.forwardVoltage ?? 0.7);
+            const isLed = comp.type === 'led';
+            const defaultVf = isLed ? (comp.params.ledColor === 'blue' || comp.params.ledColor === 'white' ? 2.8 : 1.8) : 0.7;
+            const vf = comp.params.forwardVoltage ?? defaultVf;
             const isZener = comp.type === 'zener_diode';
             const vz = comp.params.zenerVoltage ?? 5.1;
 
-            let gd = 1e-6; // Reverse leakage conductance
-            let id = 0;
-
             if (vd > vf) {
-              // Forward conduction
-              const rForward = 5; // 5 ohms dynamic series resistance
-              gd = 1 / rForward;
-              id = (vd - vf) / rForward;
+              // Forward conduction with dynamic series resistance
+              const rForward = isLed ? 12 : 1.0;
+              const gd = 1 / rForward;
+              const Ieq = -vf / rForward;
+              stampConductance(na, nk, gd);
+              stampCurrentSource(na, nk, Ieq);
             } else if (isZener && vd < -vz) {
               // Zener breakdown
-              const rZener = 10;
-              gd = 1 / rZener;
-              id = (vd + vz) / rZener;
+              const rZener = 5;
+              const gd = 1 / rZener;
+              const Ieq = vz / rZener;
+              stampConductance(na, nk, gd);
+              stampCurrentSource(na, nk, Ieq);
+            } else {
+              // Reverse cut-off: pure leakage conductance with NO current source offset
+              // Allows capacitors to discharge naturally without artificial charge clamping
+              const gLeak = 1e-9;
+              stampConductance(na, nk, gLeak);
             }
-
-            // Companion linearization: I = gd * vd + Ieq => Ieq = id - gd * vd
-            const Ieq = id - gd * vd;
-            stampConductance(na, nk, gd);
-            stampCurrentSource(na, nk, Ieq);
           }
         } else if (comp.type === 'npn') {
           const bPin = comp.pins.find(p => p.name === 'Base');
@@ -556,31 +562,33 @@ export class CircuitSimulator {
             const beta = Math.max(comp.params.beta ?? 100, 1);
 
             // Base-Emitter diode with series base resistance
+            const rbe = 30;
             let gbe = 1e-6;
             let ib = 0;
-            if (vbe > 0.55) {
-              const rbe = 25 + 50 / beta;
+            if (vbe > 0.6) {
               gbe = 1 / rbe;
               ib = Math.max(0, (vbe - 0.65) / rbe);
+              stampConductance(nb, ne, gbe);
+              stampCurrentSource(nb, ne, -0.65 * gbe);
+            } else {
+              stampConductance(nb, ne, 1e-6);
             }
-            stampConductance(nb, ne, gbe);
-            stampCurrentSource(nb, ne, ib - gbe * vbe);
 
-            // Collector-Emitter channel: dynamic conductance stamped in matrix A
-            // This prevents unbuffered current source oscillations
+            // Collector-Emitter channel: continuous transconductance in active mode
             if (ib > 0 && vce > 0) {
-              let icTarget = ib * beta;
               if (vce < 0.2) {
                 // Saturated: small saturation resistance (2 ohms)
-                const gsat = 0.5;
-                stampConductance(nc, ne, gsat);
+                stampConductance(nc, ne, 0.5);
               } else {
-                // Active mode: dynamic conductance Gce = Ic / Vce
-                const gce = Math.min(Math.max(icTarget / Math.max(vce, 0.2), 1e-6), 2.0);
-                stampConductance(nc, ne, gce);
+                // Active mode: transconductance gm = beta * gbe
+                const gm = Math.min(beta * gbe, 5.0);
+                if (nc > 0 && nb > 0) A[nc - 1][nb - 1] += gm;
+                if (nc > 0 && ne > 0) A[nc - 1][ne - 1] -= gm;
+                if (ne > 0 && nb > 0) A[ne - 1][nb - 1] -= gm;
+                if (ne > 0 && ne > 0) A[ne - 1][ne - 1] += gm;
+                stampCurrentSource(nc, ne, -0.65 * gm);
               }
             } else {
-              // Off / cutoff: high leakage resistance
               stampConductance(nc, ne, 1e-7);
             }
           }
@@ -599,24 +607,28 @@ export class CircuitSimulator {
             const vec = ve - vc;
             const beta = Math.max(comp.params.beta ?? 100, 1);
 
+            const reb = 30;
             let geb = 1e-6;
             let ib = 0;
-            if (veb > 0.55) {
-              const reb = 25 + 50 / beta;
+            if (veb > 0.6) {
               geb = 1 / reb;
               ib = Math.max(0, (veb - 0.65) / reb);
+              stampConductance(ne, nb, geb);
+              stampCurrentSource(ne, nb, -0.65 * geb);
+            } else {
+              stampConductance(ne, nb, 1e-6);
             }
-            stampConductance(ne, nb, geb);
-            stampCurrentSource(ne, nb, ib - geb * veb);
 
             if (ib > 0 && vec > 0) {
-              let icTarget = ib * beta;
               if (vec < 0.2) {
-                const gsat = 0.5;
-                stampConductance(ne, nc, gsat);
+                stampConductance(ne, nc, 0.5);
               } else {
-                const gec = Math.min(Math.max(icTarget / Math.max(vec, 0.2), 1e-6), 2.0);
-                stampConductance(ne, nc, gec);
+                const gm = Math.min(beta * geb, 5.0);
+                if (ne > 0 && ne > 0) A[ne - 1][ne - 1] += gm;
+                if (ne > 0 && nb > 0) A[ne - 1][nb - 1] -= gm;
+                if (nc > 0 && ne > 0) A[nc - 1][ne - 1] -= gm;
+                if (nc > 0 && nb > 0) A[nc - 1][nb - 1] += gm;
+                stampCurrentSource(ne, nc, -0.65 * gm);
               }
             } else {
               stampConductance(ne, nc, 1e-7);
@@ -727,17 +739,30 @@ export class CircuitSimulator {
         for (let i = 0; i < numNodeUnknowns; i++) {
           nextVoltages.push(solution[i]);
         }
+
+        let maxDiff = 0;
+        for (let i = 1; i <= numNodeUnknowns; i++) {
+          const diff = Math.abs((nodeVoltages[i] ?? 0) - nextVoltages[i]);
+          if (diff > maxDiff) maxDiff = diff;
+        }
+
         if (iter === 0) {
           nodeVoltages = nextVoltages;
         } else {
-          // Damped relaxation to guarantee smooth non-linear convergence
-          const damping = 0.6;
+          // Fast relaxation to ensure quick, stable convergence
           for (let i = 1; i <= numNodeUnknowns; i++) {
-            nodeVoltages[i] = (1 - damping) * nodeVoltages[i] + damping * nextVoltages[i];
+            nodeVoltages[i] = 0.2 * nodeVoltages[i] + 0.8 * nextVoltages[i];
           }
+        }
+
+        if (iter > 1 && maxDiff < 1e-4) {
+          break;
         }
       }
     }
+
+    // Retain converged node voltages for warm start on subsequent simulation steps
+    this.prevNodeVoltages = [...nodeVoltages];
 
     // Update states and extract currents
     const pinVoltages = new Map<string, number>();
@@ -797,22 +822,31 @@ export class CircuitSimulator {
           const va = pinVoltages.get(anodePin.id) ?? 0;
           const vk = pinVoltages.get(cathodePin.id) ?? 0;
           const vd = va - vk;
-          const vf = comp.type === 'led' ? (comp.params.forwardVoltage ?? 2.0) : (comp.params.forwardVoltage ?? 0.7);
+          const isLed = comp.type === 'led';
+          const defaultVf = isLed ? (comp.params.ledColor === 'blue' || comp.params.ledColor === 'white' ? 2.8 : 1.8) : 0.7;
+          const vf = comp.params.forwardVoltage ?? defaultVf;
 
           if (vd > vf) {
-            current = (vd - vf) / 5;
+            const rForward = isLed ? 12 : 1.0;
+            current = (vd - vf) / rForward;
+          } else if (isLed && vd > vf - 0.25) {
+            // Soft sub-threshold knee for natural illumination
+            const vDiff = vd - (vf - 0.25);
+            current = (vDiff * vDiff) / (24 * 0.25);
           } else if (comp.type === 'zener_diode' && vd < -(comp.params.zenerVoltage ?? 5.1)) {
-            current = (vd + (comp.params.zenerVoltage ?? 5.1)) / 10;
+            current = (vd + (comp.params.zenerVoltage ?? 5.1)) / 5;
           } else {
-            current = Math.max(0, vd * 1e-6);
+            current = Math.max(0, vd * 1e-9);
           }
 
-          if (comp.type === 'led') {
+          if (isLed) {
             const maxI = comp.params.maxCurrent ?? 0.035;
-            // Any current > 0.3mA (0.0003A) triggers visible luminescence, scaling with current
             const normI = Math.max(0, current / maxI);
-            const brightness = current > 0.0003 ? Math.min(0.3 + normI * 0.7, 1.8) : 0;
-            const isBlown = current > maxI * 1.8;
+            const instantBrightness = Math.min(normI, 1.4);
+            const prevBright = comp.state?.brightness ?? 0;
+            // Visual persistence (human eye / phosphor persistence so 100Hz ripple doesn't strobe-flicker)
+            const brightness = Math.max(instantBrightness, prevBright * 0.92);
+            const isBlown = current > 0.35; // Extreme 350mA destruction threshold
             comp.state = {
               voltageDrop: vd,
               current,
@@ -832,8 +866,8 @@ export class CircuitSimulator {
             const vbe = vb - ve;
             const vce = vc - ve;
             const beta = Math.max(comp.params.beta ?? 100, 1);
-            const ib = vbe > 0.55 ? Math.max(0, (vbe - 0.65) / (25 + 50 / beta)) : 0;
-            const ic = vce > 0 ? (vce < 0.2 ? Math.max(0, vce * 0.5) : Math.min(ib * beta, vce / 1.5)) : 0;
+            const ib = vbe > 0.6 ? Math.max(0, (vbe - 0.65) / 30) : 0;
+            const ic = vce > 0 ? (vce < 0.2 ? Math.max(0, vce * 0.5) : ib * beta) : 0;
             current = ic;
             vDrop = vce;
             comp.state = {
@@ -853,8 +887,8 @@ export class CircuitSimulator {
             const veb = ve - vb;
             const vec = ve - vc;
             const beta = Math.max(comp.params.beta ?? 100, 1);
-            const ib = veb > 0.55 ? Math.max(0, (veb - 0.65) / (25 + 50 / beta)) : 0;
-            const ic = vec > 0 ? (vec < 0.2 ? Math.max(0, vec * 0.5) : Math.min(ib * beta, vec / 1.5)) : 0;
+            const ib = veb > 0.6 ? Math.max(0, (veb - 0.65) / 30) : 0;
+            const ic = vec > 0 ? (vec < 0.2 ? Math.max(0, vec * 0.5) : ib * beta) : 0;
             current = ic;
             vDrop = vec;
             comp.state = {

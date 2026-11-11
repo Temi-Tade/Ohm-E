@@ -25,6 +25,10 @@ interface CircuitCanvasProps {
   onAddWire: (fromPinId: string, toPinId: string) => void;
   onToggleSwitch: (component: CircuitComponent) => void;
   onWiperChange: (component: CircuitComponent, newWiper: number) => void;
+  onTogglePushButton?: (component: CircuitComponent) => void;
+  onPressPushButton?: (component: CircuitComponent, pressed: boolean) => void;
+  onConnectWireToWire?: (fromPinId: string, targetWireId: string, midPoint: { x: number; y: number }) => void;
+  onUpdateComponentParams?: (id: string, params: Partial<CircuitComponent['params']>) => void;
   flowMode: 'conventional' | 'electron' | 'none';
   showVoltColors: boolean;
   isRunning?: boolean;
@@ -46,6 +50,10 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
   onAddWire,
   onToggleSwitch,
   onWiperChange,
+  onTogglePushButton,
+  onPressPushButton,
+  onConnectWireToWire,
+  onUpdateComponentParams,
   flowMode,
   showVoltColors,
   onDragStart,
@@ -428,6 +436,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
             const pathD = buildOrthogonalPathD(fromPos, toPos, components);
             const isSelected = wire.id === selectedWireId;
             const strokeColor = getWireStrokeColor(wire);
+            const midPoint = getWireMidPoint(fromPos, toPos, components);
 
             return (
               <g
@@ -435,8 +444,13 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                 className="cursor-pointer group"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onSelectWire(wire.id);
-                  onSelectComponent(null);
+                  if (wiringFromPinId) {
+                    onConnectWireToWire?.(wiringFromPinId, wire.id, midPoint);
+                    setWiringFromPinId(null);
+                  } else {
+                    onSelectWire(wire.id);
+                    onSelectComponent(null);
+                  }
                 }}
                 onMouseEnter={(e) => {
                   setHoverTooltip({
@@ -453,7 +467,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                   d={pathD}
                   fill="none"
                   stroke="transparent"
-                  strokeWidth={14}
+                  strokeWidth={18}
                   strokeLinecap="round"
                 />
                 {/* Glow underlay if selected */}
@@ -477,6 +491,50 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                   strokeLinejoin="round"
                   className="transition-colors group-hover:brightness-125"
                 />
+
+                {/* Wire Midpoint Target: prominent node marker when wiring mode is active */}
+                {wiringFromPinId && (
+                  <g
+                    className="cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onConnectWireToWire?.(wiringFromPinId, wire.id, midPoint);
+                      setWiringFromPinId(null);
+                    }}
+                    onTouchEnd={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onConnectWireToWire?.(wiringFromPinId, wire.id, midPoint);
+                      setWiringFromPinId(null);
+                    }}
+                  >
+                    <circle
+                      cx={midPoint.x}
+                      cy={midPoint.y}
+                      r="14"
+                      fill="#38bdf8"
+                      opacity="0.35"
+                      className="animate-ping pointer-events-none"
+                    />
+                    <circle
+                      cx={midPoint.x}
+                      cy={midPoint.y}
+                      r="18"
+                      fill="#000000"
+                      fillOpacity="0.0001"
+                      pointerEvents="all"
+                    />
+                    <circle
+                      cx={midPoint.x}
+                      cy={midPoint.y}
+                      r="5"
+                      fill="#38bdf8"
+                      stroke="#0f172a"
+                      strokeWidth="2"
+                      className="hover:scale-125 transition-transform"
+                    />
+                  </g>
+                )}
               </g>
             );
           })}
@@ -685,6 +743,8 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                   isRunning={isRunning}
                   onToggleSwitch={onToggleSwitch}
                   onWiperChange={onWiperChange}
+                  onTogglePushButton={onTogglePushButton}
+                  onPressPushButton={onPressPushButton}
                 />
 
                 {/* Terminals / Pins */}
@@ -794,19 +854,6 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                         strokeWidth={isHovered || isWiringStart ? '2.5' : '1.8'}
                         className="transition-transform group-hover/pin:scale-125"
                       />
-
-                      {/* Pin Terminal Label (A, K, +, -, etc.) */}
-                      {pin.label && (
-                        <text
-                          x="0"
-                          y={pin.y < 0 ? -9 : 12}
-                          textAnchor="middle"
-                          transform={comp.rotation ? `rotate(${-comp.rotation}, 0, ${pin.y < 0 ? -9 : 12})` : undefined}
-                          className="text-[9px] font-mono fill-slate-400 select-none pointer-events-none font-bold"
-                        >
-                          {pin.label}
-                        </text>
-                      )}
                     </g>
                   );
                 })}
@@ -850,6 +897,170 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
           )}
         </div>
       )}
+
+      {/* Floating On-Canvas Interactive Slider for Potentiometer and Sensors */}
+      {(() => {
+        const selectedComp = components.find(c => c.id === selectedComponentId);
+        if (!selectedComp) return null;
+        const isAdjustable =
+          selectedComp.type === 'potentiometer' ||
+          selectedComp.type === 'photoresistor' ||
+          selectedComp.type === 'thermistor' ||
+          selectedComp.type === 'temp_sensor' ||
+          selectedComp.type === 'sound_sensor';
+
+        if (!isAdjustable) return null;
+
+        const screenX = selectedComp.x * zoom + pan.x;
+        const screenY = selectedComp.y * zoom + pan.y + 60 * zoom;
+
+        return (
+          <div
+            className="absolute z-40 bg-[#141720]/95 backdrop-blur-md border border-[#2e3748] rounded-xl p-3 shadow-2xl flex flex-col gap-2 min-w-[210px] -translate-x-1/2 pointer-events-auto"
+            style={{
+              left: Math.max(120, Math.min(window.innerWidth - 120, screenX)),
+              top: Math.max(65, screenY),
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            {selectedComp.type === 'potentiometer' && (
+              <>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
+                    <span>🎛️</span> Wiper
+                  </span>
+                  <span className="font-mono text-amber-400 font-bold">
+                    {Math.round((selectedComp.params.wiper ?? 0.5) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={selectedComp.params.wiper ?? 0.5}
+                  onChange={(e) => onWiperChange?.(selectedComp, parseFloat(e.target.value))}
+                  className="w-full accent-amber-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                  <span>0%</span>
+                  <span>50%</span>
+                  <span>100%</span>
+                </div>
+              </>
+            )}
+
+            {selectedComp.type === 'photoresistor' && (
+              <>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
+                    <span>☀️</span> Light Level
+                  </span>
+                  <span className="font-mono text-amber-400 font-bold">
+                    {selectedComp.params.lux ?? 250} Lux
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="10"
+                  value={selectedComp.params.lux ?? 250}
+                  onChange={(e) => onUpdateComponentParams?.(selectedComp.id, { lux: parseInt(e.target.value, 10) })}
+                  className="w-full accent-amber-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                  <span>Dark (0 lx)</span>
+                  <span>500 lx</span>
+                  <span>Bright (1k lx)</span>
+                </div>
+              </>
+            )}
+
+            {selectedComp.type === 'thermistor' && (
+              <>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
+                    <span>🌡️</span> Thermistor Temp
+                  </span>
+                  <span className="font-mono text-rose-400 font-bold">
+                    {selectedComp.params.temperature ?? 25} °C
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-20"
+                  max="120"
+                  step="1"
+                  value={selectedComp.params.temperature ?? 25}
+                  onChange={(e) => onUpdateComponentParams?.(selectedComp.id, { temperature: parseInt(e.target.value, 10) })}
+                  className="w-full accent-rose-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                  <span>-20°C</span>
+                  <span>25°C</span>
+                  <span>120°C</span>
+                </div>
+              </>
+            )}
+
+            {selectedComp.type === 'temp_sensor' && (
+              <>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
+                    <span>🌡️</span> LM35 Temp
+                  </span>
+                  <span className="font-mono text-rose-400 font-bold">
+                    {selectedComp.params.temperature ?? 25} °C
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="-40"
+                  max="125"
+                  step="1"
+                  value={selectedComp.params.temperature ?? 25}
+                  onChange={(e) => onUpdateComponentParams?.(selectedComp.id, { temperature: parseInt(e.target.value, 10) })}
+                  className="w-full accent-rose-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                  <span>-40°C</span>
+                  <span>25°C</span>
+                  <span>125°C</span>
+                </div>
+              </>
+            )}
+
+            {selectedComp.type === 'sound_sensor' && (
+              <>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
+                    <span>🎙️</span> Sound Level
+                  </span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {selectedComp.params.soundLevel ?? 40} dB
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="20"
+                  max="110"
+                  step="2"
+                  value={selectedComp.params.soundLevel ?? 40}
+                  onChange={(e) => onUpdateComponentParams?.(selectedComp.id, { soundLevel: parseInt(e.target.value, 10) })}
+                  className="w-full accent-cyan-500 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                  <span>20 dB</span>
+                  <span>60 dB</span>
+                  <span>110 dB</span>
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Canvas Controls Overlay (Bottom-Right of Canvas, desktop only as mobile pinches to zoom) */}
       <div className="hidden md:flex absolute bottom-3 right-3 items-center gap-1.5 bg-[#15171b] border border-[#252831] p-1 rounded-md shadow-2xl text-[#cfd3dd] text-xs">
@@ -910,7 +1121,83 @@ function useMemoPinPositions(components: CircuitComponent[]) {
   }, [components]);
 }
 
-// Generate orthogonal Manhattan path points (routes around intermediate components)
+// Check whether a component should be considered an obstacle between two wire endpoints
+function isCompObstacle(
+  comp: CircuitComponent,
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): boolean {
+  if (comp.type === 'junction') return false;
+
+  // If from or to is one of this component's pins, this is the component being connected
+  for (const pin of comp.pins) {
+    const pinPos = getPinAbsolutePos(comp, pin);
+    if (
+      Math.hypot(pinPos.x - from.x, pinPos.y - from.y) < 6 ||
+      Math.hypot(pinPos.x - to.x, pinPos.y - to.y) < 6
+    ) {
+      return false;
+    }
+  }
+
+  // Also skip if component center is too close to either endpoint (connected component)
+  if (
+    Math.hypot(comp.x - from.x, comp.y - from.y) < 32 ||
+    Math.hypot(comp.x - to.x, comp.y - to.y) < 32
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+// Check whether a straight segment between p1 and p2 intersects any obstacle component
+function isSegmentBlocked(
+  p1: { x: number; y: number },
+  p2: { x: number; y: number },
+  components: CircuitComponent[],
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): boolean {
+  const isHorizontal = Math.abs(p1.y - p2.y) <= 4;
+  const isVertical = Math.abs(p1.x - p2.x) <= 4;
+
+  for (const comp of components) {
+    if (!isCompObstacle(comp, from, to)) continue;
+
+    const halfW = comp.rotation % 180 !== 0 ? 24 : 28;
+    const halfH = comp.rotation % 180 !== 0 ? 28 : 24;
+
+    if (isHorizontal) {
+      const y = (p1.y + p2.y) / 2;
+      const minX = Math.min(p1.x, p2.x);
+      const maxX = Math.max(p1.x, p2.x);
+
+      if (
+        Math.abs(comp.y - y) < halfH + 4 &&
+        maxX > comp.x - halfW + 6 &&
+        minX < comp.x + halfW - 6
+      ) {
+        return true;
+      }
+    } else if (isVertical) {
+      const x = (p1.x + p2.x) / 2;
+      const minY = Math.min(p1.y, p2.y);
+      const maxY = Math.max(p1.y, p2.y);
+
+      if (
+        Math.abs(comp.x - x) < halfW + 4 &&
+        maxY > comp.y - halfH + 6 &&
+        minY < comp.y + halfH - 6
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+// Generate clean, direct orthogonal Manhattan path (straight whenever possible, 1-bend L-shape if unaligned, bypassing obstacles only when necessary)
 function getOrthogonalRoute(
   from: { x: number; y: number },
   to: { x: number; y: number },
@@ -919,118 +1206,146 @@ function getOrthogonalRoute(
   const dx = to.x - from.x;
   const dy = to.y - from.y;
 
-  // Check if this is a horizontal connection between two terminals on approximately the same line
-  if (Math.abs(dy) <= 12 && Math.abs(dx) >= 15) {
-    const xMin = Math.min(from.x, to.x);
-    const xMax = Math.max(from.x, to.x);
-    const yLine = (from.y + to.y) / 2;
-
-    // Check if the straight horizontal line passes under or through any component body
-    let passesUnderComponent = false;
-    for (const comp of components) {
-      const halfWidth = comp.rotation % 180 !== 0 ? 26 : 30;
-      const halfHeight = comp.rotation % 180 !== 0 ? 30 : 26;
-
-      // Component body vertical span
-      if (Math.abs(comp.y - yLine) <= halfHeight + 4) {
-        // Horizontal span of component body (exclude terminal lead tips)
-        const bodyLeft = comp.x - halfWidth;
-        const bodyRight = comp.x + halfWidth;
-        const overlap = Math.min(xMax - 6, bodyRight) - Math.max(xMin + 6, bodyLeft);
-        if (overlap > 6) {
-          passesUnderComponent = true;
-          break;
-        }
-      }
+  // Case 1: Horizontally aligned terminals (same horizontal line)
+  if (Math.abs(dy) <= 4) {
+    const alignedTo = { x: to.x, y: from.y };
+    const blocked = isSegmentBlocked(from, alignedTo, components, from, to);
+    if (!blocked) {
+      return [from, alignedTo];
     }
-
-    if (passesUnderComponent) {
-      // Route around the component instead of cutting under/through it
-      const yAbove = Math.min(from.y, to.y) - 45;
-      const yBelow = Math.max(from.y, to.y) + 45;
-
-      // Check whether above or below has more clearance
-      let hasAboveObstruction = false;
-      for (const comp of components) {
-        if (
-          Math.abs(comp.y - yAbove) < 28 &&
-          comp.x > xMin - 15 &&
-          comp.x < xMax + 15
-        ) {
-          hasAboveObstruction = true;
-          break;
-        }
-      }
-
-      const bypassY = hasAboveObstruction ? yBelow : yAbove;
-      return [
-        from,
-        { x: from.x, y: bypassY },
-        { x: to.x, y: bypassY },
-        to,
-      ];
-    }
-
-    return [from, to];
+    // Blocked by an obstacle component directly in the middle: route around it
+    const yAbove = from.y - 45;
+    const yBelow = from.y + 45;
+    const blockedAbove = isSegmentBlocked(
+      { x: from.x, y: yAbove },
+      { x: to.x, y: yAbove },
+      components,
+      from,
+      to
+    );
+    const bypassY = blockedAbove ? yBelow : yAbove;
+    return [
+      from,
+      { x: from.x, y: bypassY },
+      { x: to.x, y: bypassY },
+      alignedTo,
+    ];
   }
 
-  // Check if this is a vertical connection between two terminals on approximately the same line
-  if (Math.abs(dx) <= 12 && Math.abs(dy) >= 15) {
-    const yMin = Math.min(from.y, to.y);
-    const yMax = Math.max(from.y, to.y);
-    const xLine = (from.x + to.x) / 2;
-
-    let passesUnderComponent = false;
-    for (const comp of components) {
-      const halfWidth = comp.rotation % 180 !== 0 ? 26 : 30;
-      const halfHeight = comp.rotation % 180 !== 0 ? 30 : 26;
-
-      if (Math.abs(comp.x - xLine) <= halfWidth + 4) {
-        const bodyTop = comp.y - halfHeight;
-        const bodyBottom = comp.y + halfHeight;
-        const overlap = Math.min(yMax - 6, bodyBottom) - Math.max(yMin + 6, bodyTop);
-        if (overlap > 6) {
-          passesUnderComponent = true;
-          break;
-        }
-      }
+  // Case 2: Vertically aligned terminals (same vertical line)
+  if (Math.abs(dx) <= 4) {
+    const alignedTo = { x: from.x, y: to.y };
+    const blocked = isSegmentBlocked(from, alignedTo, components, from, to);
+    if (!blocked) {
+      return [from, alignedTo];
     }
-
-    if (passesUnderComponent) {
-      const xLeft = Math.min(from.x, to.x) - 45;
-      const xRight = Math.max(from.x, to.x) + 45;
-
-      let hasLeftObstruction = false;
-      for (const comp of components) {
-        if (
-          Math.abs(comp.x - xLeft) < 28 &&
-          comp.y > yMin - 15 &&
-          comp.y < yMax + 15
-        ) {
-          hasLeftObstruction = true;
-          break;
-        }
-      }
-
-      const bypassX = hasLeftObstruction ? xRight : xLeft;
-      return [
-        from,
-        { x: bypassX, y: from.y },
-        { x: bypassX, y: to.y },
-        to,
-      ];
-    }
-
-    return [from, to];
+    // Blocked by an obstacle component directly in the middle: route around it
+    const xLeft = from.x - 45;
+    const xRight = from.x + 45;
+    const blockedLeft = isSegmentBlocked(
+      { x: xLeft, y: from.y },
+      { x: xLeft, y: to.y },
+      components,
+      from,
+      to
+    );
+    const bypassX = blockedLeft ? xRight : xLeft;
+    return [
+      from,
+      { x: bypassX, y: from.y },
+      { x: bypassX, y: to.y },
+      alignedTo,
+    ];
   }
 
-  if (Math.abs(dx) < 2 || Math.abs(dy) < 2) {
-    return [from, to];
+  // Case 3: Unaligned terminals: use a clean single 90-degree L-route
+  // Option 1: Horizontal then Vertical (corner at { x: to.x, y: from.y })
+  const corner1 = { x: to.x, y: from.y };
+  const blockedH1 = isSegmentBlocked(from, corner1, components, from, to);
+  const blockedV1 = isSegmentBlocked(corner1, to, components, from, to);
+  const opt1Clear = !blockedH1 && !blockedV1;
+
+  // Option 2: Vertical then Horizontal (corner at { x: from.x, y: to.y })
+  const corner2 = { x: from.x, y: to.y };
+  const blockedV2 = isSegmentBlocked(from, corner2, components, from, to);
+  const blockedH2 = isSegmentBlocked(corner2, to, components, from, to);
+  const opt2Clear = !blockedV2 && !blockedH2;
+
+  if (opt1Clear) {
+    return [from, corner1, to];
+  }
+  if (opt2Clear) {
+    return [from, corner2, to];
   }
 
-  // Horizontal then vertical, or vertical then horizontal based on orientation
+  // If both direct L-routes have an obstacle, use a stepped bypass
   const midX = from.x + dx / 2;
   return [from, { x: midX, y: from.y }, { x: midX, y: to.y }, to];
+}
+
+// Compute collinear midpoint strictly on the wire path so splitting at midpoint keeps both segments 100% straight
+function getWireMidPoint(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  components: CircuitComponent[] = []
+): { x: number; y: number } {
+  const waypoints = getOrthogonalRoute(from, to, components);
+  if (waypoints.length === 2) {
+    const p1 = waypoints[0];
+    const p2 = waypoints[1];
+    if (Math.abs(p1.y - p2.y) <= 4) {
+      // Strictly preserve horizontal line y
+      return {
+        x: Math.round(((p1.x + p2.x) / 2) / 10) * 10,
+        y: p1.y,
+      };
+    }
+    if (Math.abs(p1.x - p2.x) <= 4) {
+      // Strictly preserve vertical line x
+      return {
+        x: p1.x,
+        y: Math.round(((p1.y + p2.y) / 2) / 10) * 10,
+      };
+    }
+  }
+
+  const totalLen = getPathLength(waypoints);
+  const targetDist = totalLen / 2;
+  let accumulated = 0;
+
+  for (let i = 0; i < waypoints.length - 1; i++) {
+    const p1 = waypoints[i];
+    const p2 = waypoints[i + 1];
+    const segLen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+    if (accumulated + segLen >= targetDist || i === waypoints.length - 2) {
+      const remaining = targetDist - accumulated;
+      const ratio = segLen > 0 ? Math.max(0.15, Math.min(0.85, remaining / segLen)) : 0.5;
+
+      if (Math.abs(p1.y - p2.y) <= 4) {
+        return {
+          x: Math.round((p1.x + (p2.x - p1.x) * ratio) / 10) * 10,
+          y: p1.y,
+        };
+      }
+      if (Math.abs(p1.x - p2.x) <= 4) {
+        return {
+          x: p1.x,
+          y: Math.round((p1.y + (p2.y - p1.y) * ratio) / 10) * 10,
+        };
+      }
+      return {
+        x: p1.x + (p2.x - p1.x) * ratio,
+        y: p1.y + (p2.y - p1.y) * ratio,
+      };
+    }
+    accumulated += segLen;
+  }
+
+  return {
+    x: Math.round((from.x + to.x) / 2),
+    y: Math.round((from.y + to.y) / 2),
+  };
 }
 
 function buildOrthogonalPathD(

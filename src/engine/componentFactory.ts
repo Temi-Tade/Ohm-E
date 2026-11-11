@@ -535,6 +535,22 @@ export function createComponent(
         },
       };
 
+    case 'junction':
+      return {
+        id,
+        type,
+        name: 'Wire Node Junction',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_0`, name: '•', x: 0, y: 0 },
+        ],
+        params: {
+          ...customParams,
+        },
+      };
+
     default:
       throw new Error(`Unknown component type: ${type}`);
   }

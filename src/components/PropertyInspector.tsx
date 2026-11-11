@@ -223,50 +223,6 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               </div>
             )}
 
-            {/* Potentiometer Wiper & Rating */}
-            {selectedComponent.type === 'potentiometer' && (
-              <div className="space-y-1.5 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
-                <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-[#8b909f]">Wiper Position:</span>
-                  <span className="font-mono text-amber-400 font-bold">
-                    {Math.round((selectedComponent.params.wiper ?? 0.5) * 100)}%
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={selectedComponent.params.wiper ?? 0.5}
-                    onChange={(e) =>
-                      onUpdateComponentParams(selectedComponent.id, {
-                        wiper: parseFloat(e.target.value),
-                      })
-                    }
-                    className="flex-1 accent-amber-500 cursor-pointer h-5"
-                  />
-                  <div className="relative w-16">
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={Math.round((selectedComponent.params.wiper ?? 0.5) * 100)}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        if (!isNaN(val)) {
-                          onUpdateComponentParams(selectedComponent.id, {
-                            wiper: Math.min(Math.max(val / 100, 0), 1),
-                          });
-                        }
-                      }}
-                      className="w-full bg-[#121317] border border-[#2d313b] focus:border-amber-500 rounded px-1.5 py-1 text-xs font-mono text-[#f0f2f6] outline-none text-right pr-4"
-                    />
-                    <span className="absolute right-1.5 top-1 text-[10px] text-[#717684] font-mono">%</span>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Capacitance Editor */}
             {selectedComponent.params.capacitance !== undefined && (
@@ -826,65 +782,6 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               </div>
             )}
 
-            {/* Photoresistor (LDR) Controls */}
-            {selectedComponent.type === 'photoresistor' && (
-              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
-                <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-[#8b909f]">Ambient Light Level:</span>
-                  <span className="font-mono text-amber-400 font-bold">
-                    {selectedComponent.params.lux ?? 250} Lux
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1000"
-                  step="10"
-                  value={selectedComponent.params.lux ?? 250}
-                  onChange={(e) =>
-                    onUpdateComponentParams(selectedComponent.id, {
-                      lux: parseInt(e.target.value, 10),
-                    })
-                  }
-                  className="w-full accent-amber-500 cursor-pointer h-5"
-                />
-                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
-                  <span>0 lx (Dark ~500kΩ)</span>
-                  <span>500 lx</span>
-                  <span>1000 lx (Bright ~1kΩ)</span>
-                </div>
-              </div>
-            )}
-
-            {/* NTC Thermistor Controls */}
-            {selectedComponent.type === 'thermistor' && (
-              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
-                <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-[#8b909f]">Sensor Temperature:</span>
-                  <span className="font-mono text-rose-400 font-bold">
-                    {selectedComponent.params.temperature ?? 25} °C
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="-20"
-                  max="120"
-                  step="1"
-                  value={selectedComponent.params.temperature ?? 25}
-                  onChange={(e) =>
-                    onUpdateComponentParams(selectedComponent.id, {
-                      temperature: parseInt(e.target.value, 10),
-                    })
-                  }
-                  className="w-full accent-rose-500 cursor-pointer h-5"
-                />
-                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
-                  <span>-20°C (Cold ~90kΩ)</span>
-                  <span>25°C (10kΩ)</span>
-                  <span>120°C (Hot ~400Ω)</span>
-                </div>
-              </div>
-            )}
 
             {/* PIR Motion Sensor Controls */}
             {selectedComponent.type === 'pir_sensor' && (
@@ -912,97 +809,59 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               </div>
             )}
 
-            {/* Analog Temp Sensor (LM35) Controls */}
-            {selectedComponent.type === 'temp_sensor' && (
-              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+            {/* Push Button & Switch State */}
+            {selectedComponent.type === 'push_button' && (
+              <div className="space-y-2.5 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-[#8b909f]">Environment Temp:</span>
-                  <span className="font-mono text-rose-400 font-bold">
-                    {selectedComponent.params.temperature ?? 25} °C
+                  <span className="text-[#8b909f]">Button State:</span>
+                  <span className={`font-mono font-bold ${selectedComponent.params.pressed ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {selectedComponent.params.pressed ? 'PRESSED (CLOSED)' : 'RELEASED (OPEN)'}
                   </span>
                 </div>
-                <input
-                  type="range"
-                  min="-40"
-                  max="125"
-                  step="1"
-                  value={selectedComponent.params.temperature ?? 25}
-                  onChange={(e) =>
+                <button
+                  onClick={() =>
                     onUpdateComponentParams(selectedComponent.id, {
-                      temperature: parseInt(e.target.value, 10),
+                      pressed: !selectedComponent.params.pressed,
                     })
                   }
-                  className="w-full accent-rose-500 cursor-pointer h-5"
-                />
-                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
-                  <span>-40°C (100mV)</span>
-                  <span>25°C (750mV)</span>
-                  <span>125°C (1.75V)</span>
-                </div>
+                  className={`w-full py-2 px-3 rounded-lg font-medium text-xs border transition-colors cursor-pointer ${
+                    selectedComponent.params.pressed
+                      ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300'
+                      : 'bg-[#20232a] hover:bg-[#282c35] border-[#2e323e] text-[#cfd3dd]'
+                  }`}
+                >
+                  {selectedComponent.params.pressed ? 'Release Button (Open)' : 'Push Button (Close)'}
+                </button>
               </div>
             )}
 
-            {/* Sound Sensor Controls */}
-            {selectedComponent.type === 'sound_sensor' && (
-              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+            {selectedComponent.type === 'switch' && (
+              <div className="space-y-2.5 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-[#8b909f]">Acoustic Level:</span>
-                  <span className="font-mono text-cyan-400 font-bold">
-                    {selectedComponent.params.soundLevel ?? 40} dB
+                  <span className="text-[#8b909f]">Toggle Switch:</span>
+                  <span className={`font-mono font-bold ${selectedComponent.params.closed ? 'text-emerald-400' : 'text-slate-400'}`}>
+                    {selectedComponent.params.closed ? 'CLOSED (ON)' : 'OPEN (OFF)'}
                   </span>
                 </div>
-                <input
-                  type="range"
-                  min="20"
-                  max="110"
-                  step="2"
-                  value={selectedComponent.params.soundLevel ?? 40}
-                  onChange={(e) =>
+                <button
+                  onClick={() =>
                     onUpdateComponentParams(selectedComponent.id, {
-                      soundLevel: parseInt(e.target.value, 10),
+                      closed: !selectedComponent.params.closed,
                     })
                   }
-                  className="w-full accent-cyan-500 cursor-pointer h-5"
-                />
-                <div className="flex justify-between text-[10px] font-mono text-[#717684]">
-                  <span>20 dB (Whisper)</span>
-                  <span>60 dB (Normal)</span>
-                  <span>110 dB (Loud Clap)</span>
-                </div>
+                  className={`w-full py-2 px-3 rounded-lg font-medium text-xs border transition-colors cursor-pointer ${
+                    selectedComponent.params.closed
+                      ? 'bg-emerald-950/60 border-emerald-500 text-emerald-300'
+                      : 'bg-[#20232a] hover:bg-[#282c35] border-[#2e323e] text-[#cfd3dd]'
+                  }`}
+                >
+                  {selectedComponent.params.closed ? 'Open Switch' : 'Close Switch'}
+                </button>
               </div>
             )}
+
           </div>
         )}
-
-        {/* Action Buttons */}
-        <div className="pt-3 border-t border-slate-800 space-y-2 pb-4">
-          {selectedComponent && (
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => onRotateComponent(selectedComponent.id)}
-                className="py-2 px-2 bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] rounded-lg text-[#cfd3dd] border border-[#2d313b] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <RotateCw className="w-4 h-4" />
-                <span>Rotate [R]</span>
-              </button>
-              <button
-                onClick={() => onDuplicateComponent(selectedComponent)}
-                className="py-2 px-2 bg-[#22252c] hover:bg-[#2b2e37] active:bg-[#1a1c22] rounded-lg text-[#cfd3dd] border border-[#2d313b] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Copy className="w-4 h-4" />
-                <span>Duplicate</span>
-              </button>
-            </div>
-          )}
-
-          <button
-            onClick={onDeleteSelected}
-            className="w-full py-2 px-2 bg-[#2a1b1f] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] rounded-lg border border-[#4a2228] flex items-center justify-center gap-1.5 transition-colors cursor-pointer font-semibold"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span>Delete Selected</span>
-          </button>
-        </div>
       </div>
     </div>
   );

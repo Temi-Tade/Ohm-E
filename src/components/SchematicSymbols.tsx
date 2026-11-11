@@ -12,6 +12,8 @@ interface SymbolProps {
   isRunning?: boolean;
   onToggleSwitch?: (component: CircuitComponent) => void;
   onWiperChange?: (component: CircuitComponent, newWiper: number) => void;
+  onTogglePushButton?: (component: CircuitComponent) => void;
+  onPressPushButton?: (component: CircuitComponent, pressed: boolean) => void;
 }
 
 interface UprightTextProps extends React.SVGProps<SVGTextElement> {
@@ -52,6 +54,8 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
   isRunning = true,
   onToggleSwitch,
   onWiperChange,
+  onTogglePushButton,
+  onPressPushButton,
 }) => {
   const { type, params, state } = component;
   const rot = component.rotation || 0;
@@ -107,67 +111,6 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             points={`${(wiper - 0.5) * 36},6 ${(wiper - 0.5) * 36 - 4},13 ${(wiper - 0.5) * 36 + 4},13`}
             fill="#f59e0b"
           />
-          {/* Interactive slider track for wiper */}
-          <line
-            x1="-24"
-            y1="-14"
-            x2="24"
-            y2="-14"
-            stroke="#475569"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <circle
-            cx={-24 + wiper * 48}
-            cy="-14"
-            r="6"
-            fill="#f59e0b"
-            stroke="#ffffff"
-            strokeWidth="1.5"
-            onTouchStart={(e) => {
-              e.stopPropagation();
-              if (e.touches.length === 0) return;
-              const startX = e.touches[0].clientX;
-              const startWiper = wiper;
-              const onTouchMove = (moveEv: TouchEvent) => {
-                if (moveEv.touches.length === 0) return;
-                const delta = (moveEv.touches[0].clientX - startX) / 60;
-                const nextW = Math.min(Math.max(startWiper + delta, 0), 1);
-                onWiperChange?.(component, Math.round(nextW * 100) / 100);
-              };
-              const onTouchEnd = () => {
-                window.removeEventListener('touchmove', onTouchMove);
-                window.removeEventListener('touchend', onTouchEnd);
-              };
-              window.addEventListener('touchmove', onTouchMove);
-              window.addEventListener('touchend', onTouchEnd);
-            }}
-            onMouseDown={(e) => {
-              e.stopPropagation();
-              const startX = e.clientX;
-              const startWiper = wiper;
-              const onMove = (moveEv: MouseEvent) => {
-                const delta = (moveEv.clientX - startX) / 60;
-                const nextW = Math.min(Math.max(startWiper + delta, 0), 1);
-                onWiperChange?.(component, Math.round(nextW * 100) / 100);
-              };
-              const onUp = () => {
-                window.removeEventListener('mousemove', onMove);
-                window.removeEventListener('mouseup', onUp);
-              };
-              window.addEventListener('mousemove', onMove);
-              window.addEventListener('mouseup', onUp);
-            }}
-          />
-          <UprightText
-            x={0}
-            y={-22}
-            rot={rot}
-            textAnchor="middle"
-            className="fill-amber-400 text-[10px] font-mono pointer-events-none select-none font-bold"
-          >
-            {Math.round(wiper * 100)}% ({formatResistance(params.resistance ?? 10000)})
-          </UprightText>
         </g>
       );
     }
@@ -381,26 +324,47 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
         white: '#f8fafc',
       };
       const litColor = colorHexMap[colorKey];
-      const brightness = state?.brightness || 0;
+      const brightness = Math.min(1.5, Math.max(0, state?.brightness ?? 0));
       const isBlown = state?.isBlown;
-      const isLit = isRunning && brightness > 0.05 && !isBlown;
+      const isLit = brightness > 0.02 && !isBlown;
+      const gradId = `led-glow-${component.id.replace(/[^a-zA-Z0-9]/g, '_')}`;
 
       return (
         <g className="select-none">
+          <defs>
+            <radialGradient id={gradId} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity={Math.min(0.9, brightness * 0.85)} />
+              <stop offset="25%" stopColor={litColor} stopOpacity={Math.min(0.8, brightness * 0.75)} />
+              <stop offset="60%" stopColor={litColor} stopOpacity={Math.min(0.35, brightness * 0.3)} />
+              <stop offset="100%" stopColor={litColor} stopOpacity="0" />
+            </radialGradient>
+          </defs>
+
           <line x1="-40" y1="0" x2="-14" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="14" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
 
-          {/* Glowing Aura if turned on */}
+          {/* Glowing Aura / Halo if illuminated (VoltSim style) */}
           {isLit && (
-            <circle
-              cx="0"
-              cy="0"
-              r={16 + brightness * 12}
-              fill={litColor}
-              opacity={brightness * 0.45}
-              filter="blur(4px)"
-              className="pointer-events-none"
-            />
+            <>
+              {/* Wide ambient radial halo */}
+              <circle
+                cx="0"
+                cy="0"
+                r={26 + brightness * 16}
+                fill={`url(#${gradId})`}
+                className="pointer-events-none"
+              />
+              {/* Intense blurred core bloom */}
+              <circle
+                cx="0"
+                cy="0"
+                r={14 + brightness * 6}
+                fill={litColor}
+                opacity={Math.min(0.65, brightness * 0.6)}
+                style={{ filter: 'blur(4px)' }}
+                className="pointer-events-none"
+              />
+            </>
           )}
 
           {/* Diode body */}
@@ -457,8 +421,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="18" y1="22" x2="20" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
           {/* Arrow pointing away from Base on Emitter */}
           <polygon points="12,14 18,22 8,20" fill={strokeColor} />
-          <UprightText x={-4} y={-32} rot={rot} textAnchor="middle" className="fill-slate-400 text-[9px] font-mono">
-            NPN (β={params.beta ?? 100})
+          {/* Terminal labels positioned directly on top of the terminals */}
+          <UprightText x={-36} y={-8} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
+            B
+          </UprightText>
+          <UprightText x={32} y={-38} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
+            C
+          </UprightText>
+          <UprightText x={32} y={42} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
+            E
           </UprightText>
         </g>
       );
@@ -476,8 +447,15 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           {/* Collector slant */}
           <line x1="-12" y1="8" x2="18" y2="22" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="18" y1="22" x2="20" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <UprightText x={-4} y={-32} rot={rot} textAnchor="middle" className="fill-slate-400 text-[9px] font-mono">
-            PNP (β={params.beta ?? 100})
+          {/* Terminal labels positioned directly on top of the terminals */}
+          <UprightText x={-36} y={-8} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
+            B
+          </UprightText>
+          <UprightText x={32} y={-38} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
+            E
+          </UprightText>
+          <UprightText x={32} y={42} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
+            C
           </UprightText>
         </g>
       );
@@ -503,14 +481,14 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="6" y1="0" x2="6" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
           <polygon points="-5,0 0,-4 0,4" fill={strokeColor} />
-          {/* Terminal Labels: Only G, D, S */}
-          <UprightText x={-30} y={-6} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+          {/* Terminal labels positioned directly on top of the terminals outside the circle */}
+          <UprightText x={-36} y={-8} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
             G
           </UprightText>
-          <UprightText x={10} y={-26} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+          <UprightText x={32} y={-38} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
             D
           </UprightText>
-          <UprightText x={10} y={28} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+          <UprightText x={32} y={42} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
             S
           </UprightText>
         </g>
@@ -536,14 +514,14 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <line x1="-6" y1="0" x2="6" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="6" y1="0" x2="6" y2="-11" stroke={strokeColor} strokeWidth={strokeWidth} />
           <polygon points="5,0 0,-4 0,4" fill={strokeColor} />
-          {/* Terminal Labels: Only G, D, S */}
-          <UprightText x={-30} y={-6} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+          {/* Terminal labels positioned directly on top of the terminals outside the circle */}
+          <UprightText x={-36} y={-8} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
             G
           </UprightText>
-          <UprightText x={10} y={-26} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+          <UprightText x={32} y={-38} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
             S
           </UprightText>
-          <UprightText x={10} y={28} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono font-bold select-none">
+          <UprightText x={32} y={42} rot={rot} textAnchor="middle" className="fill-slate-300 text-[10px] font-mono font-bold select-none">
             D
           </UprightText>
         </g>
@@ -568,9 +546,6 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           <UprightText x={-24} y={24} rot={rot} className="fill-slate-400 text-[14px] font-bold">−</UprightText>
           {/* OUT lead at (30, 0) to (40, 0) */}
           <line x1="30" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <UprightText x={-4} y={4} rot={rot} textAnchor="middle" className="fill-slate-400 text-[10px] font-mono">
-            OPAMP
-          </UprightText>
         </g>
       );
 
@@ -623,38 +598,94 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
     case 'push_button': {
       const isPressed = params.pressed ?? false;
       return (
-        <g className="cursor-pointer">
+        <g
+          className="cursor-pointer group select-none"
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePushButton?.(component);
+          }}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onPressPushButton?.(component, true);
+          }}
+          onMouseUp={(e) => {
+            e.stopPropagation();
+            onPressPushButton?.(component, false);
+          }}
+          onMouseLeave={() => {
+            if (isPressed) {
+              onPressPushButton?.(component, false);
+            }
+          }}
+          onTouchStart={(e) => {
+            e.stopPropagation();
+            onPressPushButton?.(component, true);
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onPressPushButton?.(component, false);
+          }}
+        >
+          {/* Terminals */}
           <line x1="-40" y1="0" x2="-18" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="18" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <circle cx="-18" cy="0" r="3.5" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <circle cx="18" cy="0" r="3.5" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
-          {/* Actuator plate */}
+          <circle cx="-18" cy="0" r="3.5" fill="#0f172a" stroke={isPressed ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="18" cy="0" r="3.5" fill="#0f172a" stroke={isPressed ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+
+          {/* Actuator contact plate: snaps down to contact level y=0 when pressed */}
           <line
             x1="-22"
-            y1={isPressed ? 0 : -8}
+            y1={isPressed ? 0 : -9}
             x2="22"
-            y2={isPressed ? 0 : -8}
+            y2={isPressed ? 0 : -9}
             stroke={isPressed ? '#10b981' : strokeColor}
-            strokeWidth="3"
+            strokeWidth="3.5"
             strokeLinecap="round"
           />
+          {/* Actuator plunger stem */}
           <line
             x1="0"
-            y1={isPressed ? 0 : -8}
+            y1={isPressed ? 0 : -9}
             x2="0"
-            y2={isPressed ? -10 : -18}
-            stroke={strokeColor}
-            strokeWidth="2"
+            y2={isPressed ? -10 : -19}
+            stroke={isPressed ? '#10b981' : strokeColor}
+            strokeWidth="2.5"
           />
+          {/* Tactile push button cap */}
+          <rect
+            x="-12"
+            y={isPressed ? -16 : -25}
+            width="24"
+            height="6"
+            rx="2"
+            fill={isPressed ? '#10b981' : '#334155'}
+            stroke={isPressed ? '#34d399' : '#64748b'}
+            strokeWidth="1.5"
+            className="transition-all"
+          />
+
+          {/* Push Label */}
           <UprightText
             x={0}
-            y={-22}
+            y={isPressed ? -20 : -29}
             rot={rot}
             textAnchor="middle"
-            className="fill-slate-400 text-[9px] font-mono pointer-events-none"
+            className={`text-[9px] font-bold font-mono select-none transition-colors ${isPressed ? 'fill-emerald-400' : 'fill-slate-400'}`}
           >
-            PUSH
+            {isPressed ? 'PRESSED' : 'PUSH'}
           </UprightText>
+
+          {/* Expanded transparent hit area for effortless clicking and holding */}
+          <rect
+            x="-32"
+            y="-32"
+            width="64"
+            height="44"
+            fill="#000000"
+            fillOpacity="0.0001"
+            pointerEvents="all"
+          />
         </g>
       );
     }
@@ -933,6 +964,13 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
         </g>
       );
     }
+
+    case 'junction':
+      return (
+        <g className="select-none">
+          <circle cx="0" cy="0" r="4" fill="#38bdf8" stroke="#0f172a" strokeWidth="1" />
+        </g>
+      );
 
     default:
       return null;

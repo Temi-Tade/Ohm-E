@@ -86,30 +86,41 @@ export function getPresetCircuits(): CircuitPreset[] {
     { id: 'w_pot_5', fromPinId: potVoltmeter.pins[1].id, toPinId: potGnd3.pins[0].id }, // Voltmeter - to GND
   ];
 
-  // 5. Full-Wave Bridge Rectifier
-  const brSource = createComponent('ac_source', 180, 280, { voltage: 12, frequency: 50 });
-  const brD1 = createComponent('diode', 340, 200); // Top Left
-  const brD2 = createComponent('diode', 480, 200); // Top Right
-  const brD3 = createComponent('diode', 340, 360); // Bottom Left
-  const brD4 = createComponent('diode', 480, 360); // Bottom Right
-  const brCap = createComponent('capacitor', 620, 280, { capacitance: 47e-6 });
-  brCap.rotation = 90;
-  const brRes = createComponent('resistor', 740, 280, { resistance: 1000 });
+  // 5. Full-Wave Bridge Rectifier with Filter & LED
+  const brSource = createComponent('ac_source', 140, 260, { voltage: 5, frequency: 100 });
+  const brRSeries = createComponent('resistor', 240, 260, { resistance: 220 });
+  const brD1 = createComponent('diode', 360, 200); // AC1 -> DC+
+  const brD2 = createComponent('diode', 360, 320); // DC- -> AC1
+  brD2.rotation = 180; // Facing left so Anode is right (DC-) and Cathode is left (AC1)
+  const brD3 = createComponent('diode', 480, 200); // AC2 -> DC+
+  const brD4 = createComponent('diode', 480, 320); // DC- -> AC2
+  brD4.rotation = 180; // Facing left so Anode is right (DC-) and Cathode is left (AC2)
+  const brLed = createComponent('led', 620, 260, { forwardVoltage: 1.8, ledColor: 'red' });
+  brLed.rotation = 90;
+  const brRes = createComponent('resistor', 700, 260, { resistance: 1000 });
   brRes.rotation = 90;
-  const brGnd = createComponent('ground', 480, 460);
+  const brCap = createComponent('capacitor', 780, 260, { capacitance: 10e-6 });
+  brCap.rotation = 90;
 
   const brWires: Wire[] = [
-    { id: 'w_br_1', fromPinId: brSource.pins[0].id, toPinId: brD1.pins[0].id },
-    { id: 'w_br_2', fromPinId: brD1.pins[0].id, toPinId: brD3.pins[1].id },
-    { id: 'w_br_3', fromPinId: brSource.pins[1].id, toPinId: brD2.pins[1].id },
-    { id: 'w_br_4', fromPinId: brD2.pins[1].id, toPinId: brD4.pins[0].id },
-    { id: 'w_br_5', fromPinId: brD1.pins[1].id, toPinId: brD2.pins[0].id }, // Positive DC rail
-    { id: 'w_br_6', fromPinId: brD2.pins[0].id, toPinId: brCap.pins[0].id },
-    { id: 'w_br_7', fromPinId: brCap.pins[0].id, toPinId: brRes.pins[0].id },
-    { id: 'w_br_8', fromPinId: brD3.pins[0].id, toPinId: brD4.pins[1].id }, // Negative DC rail
-    { id: 'w_br_9', fromPinId: brD4.pins[1].id, toPinId: brCap.pins[1].id },
-    { id: 'w_br_10', fromPinId: brCap.pins[1].id, toPinId: brRes.pins[1].id },
-    { id: 'w_br_11', fromPinId: brD4.pins[1].id, toPinId: brGnd.pins[0].id },
+    // AC Source to series resistor
+    { id: 'w_br_1', fromPinId: brSource.pins[0].id, toPinId: brRSeries.pins[0].id },
+    // AC1 node: series resistor to D1 Anode and D2 Cathode
+    { id: 'w_br_2', fromPinId: brRSeries.pins[1].id, toPinId: brD1.pins[0].id },
+    { id: 'w_br_3', fromPinId: brRSeries.pins[1].id, toPinId: brD2.pins[1].id },
+    // AC2 node: AC Source - to D3 Anode and D4 Cathode
+    { id: 'w_br_4', fromPinId: brSource.pins[1].id, toPinId: brD3.pins[0].id },
+    { id: 'w_br_5', fromPinId: brSource.pins[1].id, toPinId: brD4.pins[1].id },
+    // Positive DC rail: D1 Cathode & D3 Cathode -> LED Anode, Resistor 1, Capacitor +
+    { id: 'w_br_6', fromPinId: brD1.pins[1].id, toPinId: brD3.pins[1].id },
+    { id: 'w_br_7', fromPinId: brD3.pins[1].id, toPinId: brLed.pins[0].id },
+    { id: 'w_br_8', fromPinId: brLed.pins[0].id, toPinId: brRes.pins[0].id },
+    { id: 'w_br_9', fromPinId: brRes.pins[0].id, toPinId: brCap.pins[0].id },
+    // Negative DC rail: D2 Anode & D4 Anode -> LED Cathode, Resistor 2, Capacitor -
+    { id: 'w_br_10', fromPinId: brD2.pins[0].id, toPinId: brD4.pins[0].id },
+    { id: 'w_br_11', fromPinId: brD4.pins[0].id, toPinId: brLed.pins[1].id },
+    { id: 'w_br_12', fromPinId: brLed.pins[1].id, toPinId: brRes.pins[1].id },
+    { id: 'w_br_13', fromPinId: brRes.pins[1].id, toPinId: brCap.pins[1].id },
   ];
 
   // 6. Transistor BJT Switch / LED Driver
@@ -189,11 +200,11 @@ export function getPresetCircuits(): CircuitPreset[] {
       name: 'Full-Wave Bridge Rectifier',
       description: 'AC to smoothed DC conversion using 4 diodes and reservoir capacitor.',
       category: 'Power',
-      components: [brSource, brD1, brD2, brD3, brD4, brCap, brRes, brGnd],
+      components: [brSource, brRSeries, brD1, brD2, brD3, brD4, brLed, brRes, brCap],
       wires: brWires,
       defaultScope: {
-        timebase: 0.005,
-        voltsPerDiv: 5.0,
+        timebase: 0.002, // 2 ms/div matching VoltSim
+        voltsPerDiv: 1.0,
       },
     },
     {

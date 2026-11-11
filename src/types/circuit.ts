@@ -29,7 +29,8 @@ export type ComponentType =
   | 'thermistor'
   | 'pir_sensor'
   | 'temp_sensor'
-  | 'sound_sensor';
+  | 'sound_sensor'
+  | 'junction';
 
 export interface Pin {
   id: string;
@@ -136,12 +137,27 @@ export interface ScopeChannel {
   coupling: 'dc' | 'ac';
 }
 
+export interface ScopeProbe {
+  id: string; // unique probe id
+  targetId: string; // component id or wire id
+  type: 'component' | 'wire';
+  name: string;
+  color: string;
+  channelIndex: number; // 0, 1, or 2
+}
+
 export interface ScopeSample {
   time: number;
+  v?: number; // legacy fallback
+  // Channel 0 (e.g. Orange)
   v0?: number;
+  i0?: number;
+  // Channel 1 (e.g. Cyan)
   v1?: number;
+  i1?: number;
+  // Channel 2 (e.g. Emerald/Purple)
   v2?: number;
-  v3?: number;
+  i2?: number;
   [key: string]: number | undefined;
 }
 
@@ -151,6 +167,10 @@ export interface ScopeMeasurement {
   vmax: number;
   vmin: number;
   freq: number;
+  iavg?: number;
+  imax?: number;
+  imin?: number;
+  irms?: number;
 }
 
 export interface CircuitState {

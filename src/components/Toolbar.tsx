@@ -78,6 +78,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onExportJson,
   onImportJson,
   onOpenHelp,
+  onOpenMobilePalette,
   isScopeOpen,
   onToggleScope,
   selectedComponentName,
