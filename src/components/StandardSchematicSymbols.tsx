@@ -39,12 +39,23 @@ export const StandardSymbolIcon: React.FC<StandardSymbolIconProps> = ({ type, cl
         </svg>
       );
 
-    case 'clock_source':
-      // Circle with digital square pulse inside
+    case 'square_wave':
+      // Circle with bipolar square wave inside
       return (
         <svg viewBox="0 0 24 24" fill="none" className={className}>
           <circle cx="12" cy="12" r="8" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <path d="M 7 14 L 9.5 14 L 9.5 10 L 14.5 10 L 14.5 14 L 17 14" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinecap="square" fill="none" />
+          <path d="M 6.5 14 L 8.5 14 L 8.5 9 L 12 9 L 12 15 L 15.5 15 L 15.5 9 L 17.5 9" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinecap="square" fill="none" />
+          <line x1="1" y1="12" x2="4" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="20" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'pulse_gen':
+      // Rounded box with PWM asymmetric pulse inside
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="4" y="4" width="16" height="16" rx="3" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 6.5 15 L 8.5 15 L 8.5 9 L 13 9 L 13 15 L 17.5 15" stroke="#22d3ee" strokeWidth={strokeWidth} strokeLinecap="square" fill="none" />
           <line x1="1" y1="12" x2="4" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="20" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
         </svg>
@@ -110,6 +121,17 @@ export const StandardSymbolIcon: React.FC<StandardSymbolIconProps> = ({ type, cl
           <path d="M 9 14 C 9 7, 14 7, 14 14" stroke={strokeColor} strokeWidth={strokeWidth} fill="none" />
           <path d="M 14 14 C 14 7, 19 7, 19 14" stroke={strokeColor} strokeWidth={strokeWidth} fill="none" />
           <line x1="19" y1="14" x2="22" y2="14" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'transformer':
+      // Primary & secondary coils around twin iron core bars
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <path d="M 2 6 L 7 6 C 10 6, 10 10, 7 10 C 10 10, 10 14, 7 14 C 10 14, 10 18, 7 18 L 2 18" stroke={strokeColor} strokeWidth={strokeWidth} fill="none" />
+          <line x1="11" y1="5" x2="11" y2="19" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="13" y1="5" x2="13" y2="19" stroke={strokeColor} strokeWidth={1.4} />
+          <path d="M 22 6 L 17 6 C 14 6, 14 10, 17 10 C 14 10, 14 14, 17 14 C 14 14, 14 18, 17 18 L 22 18" stroke={strokeColor} strokeWidth={strokeWidth} fill="none" />
         </svg>
       );
 
@@ -257,6 +279,21 @@ export const StandardSymbolIcon: React.FC<StandardSymbolIconProps> = ({ type, cl
           <line x1="7" y1="9" x2="17" y2="9" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinecap="round" />
           <line x1="12" y1="9" x2="12" y2="4" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="9" y1="4" x2="15" y2="4" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinecap="round" />
+        </svg>
+      );
+
+    case 'relay':
+      // Coil box on left + SPDT switch contacts on right
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="3" y="4" width="18" height="16" rx="2" stroke={strokeColor} strokeWidth={1.3} opacity="0.7" />
+          <rect x="6" y="7" width="4.5" height="10" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="6" y1="15" x2="10.5" y2="9" stroke={strokeColor} strokeWidth={1.2} />
+          <line x1="11" y1="12" x2="14" y2="12" stroke={strokeColor} strokeWidth={1} strokeDasharray="1.5,1.5" />
+          <line x1="18" y1="12" x2="14" y2="7.5" stroke="#10b981" strokeWidth={1.6} strokeLinecap="round" />
+          <circle cx="18" cy="12" r="1.2" fill={strokeColor} />
+          <circle cx="14" cy="7.5" r="1" fill={strokeColor} />
+          <circle cx="14" cy="16.5" r="1" fill={strokeColor} />
         </svg>
       );
 

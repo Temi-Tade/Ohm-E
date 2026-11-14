@@ -384,7 +384,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
       style={{ touchAction: 'none' }}
-      className="relative flex-1 min-h-0 w-full bg-[#0e1013] overflow-hidden cursor-crosshair select-none"
+      className="relative flex-1 h-full min-h-0 w-full bg-[#0e1013] overflow-hidden cursor-crosshair select-none"
     >
       {/* Background Blueprint Grid pattern */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-60">
@@ -904,6 +904,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
         if (!selectedComp) return null;
         const isAdjustable =
           selectedComp.type === 'potentiometer' ||
+          selectedComp.type === 'pulse_gen' ||
           selectedComp.type === 'photoresistor' ||
           selectedComp.type === 'thermistor' ||
           selectedComp.type === 'temp_sensor' ||
@@ -1055,6 +1056,35 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                   <span>20 dB</span>
                   <span>60 dB</span>
                   <span>110 dB</span>
+                </div>
+              </>
+            )}
+
+            {selectedComp.type === 'pulse_gen' && (
+              <>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-[#94a3b8] font-medium">Duty Cycle</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {Math.round((selectedComp.params.dutyCycle ?? 0.5) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="1"
+                  max="99"
+                  step="1"
+                  value={Math.round((selectedComp.params.dutyCycle ?? 0.5) * 100)}
+                  onChange={(e) =>
+                    onUpdateComponentParams?.(selectedComp.id, {
+                      dutyCycle: parseInt(e.target.value, 10) / 100,
+                    })
+                  }
+                  className="w-full accent-cyan-400 cursor-pointer h-5"
+                />
+                <div className="flex justify-between text-[10px] font-mono text-[#64748b]">
+                  <span>1%</span>
+                  <span>50%</span>
+                  <span>99%</span>
                 </div>
               </>
             )}

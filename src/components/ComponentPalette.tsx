@@ -32,8 +32,9 @@ const PALETTE_ITEMS: PaletteItem[] = [
 
   // Sources
   { type: 'dc_source', label: 'DC Voltage Source', category: 'sources', hint: 'Constant DC potential' },
-  { type: 'ac_source', label: 'AC Generator', category: 'sources', hint: 'Sine / Square wave source' },
-  { type: 'clock_source', label: 'Pulse Clock', category: 'sources', hint: 'Digital pulse generator' },
+  { type: 'ac_source', label: 'AC Generator', category: 'sources', hint: 'Sine wave AC source' },
+  { type: 'square_wave', label: 'Square Wave Generator', category: 'sources', hint: 'Bipolar symmetrical square wave' },
+  { type: 'pulse_gen', label: 'Pulse Wave Gen (PWM)', category: 'sources', hint: 'Pulse train with editable duty cycle' },
   { type: 'ground', label: 'Ground (0V Ref)', category: 'sources', hint: 'Zero-volt reference potential' },
 
   // Passives
@@ -41,6 +42,7 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'potentiometer', label: 'Potentiometer', category: 'passives', hint: 'Variable 3-terminal divider' },
   { type: 'capacitor', label: 'Capacitor', category: 'passives', hint: 'Electrostatic charge storage (F)' },
   { type: 'inductor', label: 'Inductor', category: 'passives', hint: 'Magnetic flux storage (H)' },
+  { type: 'transformer', label: 'Transformer', category: 'passives', hint: 'Isolated AC step-up / step-down' },
 
   // Semiconductors
   { type: 'diode', label: 'PN Junction Diode', category: 'semiconductors', hint: 'One-way current rectifier' },
@@ -55,6 +57,7 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'opamp', label: 'Operational Amplifier', category: 'controls', hint: 'High-gain differential op-amp' },
   { type: 'switch', label: 'SPST Switch', category: 'controls', hint: 'Single-pole single-throw' },
   { type: 'push_button', label: 'Push Button', category: 'controls', hint: 'Normally-open momentary switch' },
+  { type: 'relay', label: 'SPDT Relay', category: 'controls', hint: 'Electromagnetic coil switch (NC/NO)' },
   { type: 'buzzer', label: 'Piezo Buzzer', category: 'controls', hint: 'Acoustic audio transducer' },
 
   // Meters

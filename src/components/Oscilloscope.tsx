@@ -132,7 +132,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
 
   // Measurements for active channel
   const measurements = useMemo(() => {
-    if (samples.length < 5) {
+    if (probes.length === 0 || samples.length < 5) {
       return { vpp: 0, vrms: 0, vmax: 0, vmin: 0, freq: 0, vavg: 0, latest: 0, imax: 0, imin: 0, irms: 0, ilatest: 0 };
     }
 
@@ -245,8 +245,6 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animId: number;
-
     const render = () => {
       const container = canvasContainerRef.current;
       if (!container) return;
@@ -348,68 +346,137 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       const totalTimeSpan = timebase * numDivsX;
       const N = samples.length;
 
-      if (N >= 2) {
+      if (probes.length > 0 && N >= 2) {
+        const tEarliest = samples[0].time;
         const tLatest = samples[N - 1].time;
-        let tStart = Math.max(0, tLatest - totalTimeSpan);
+        const availableSpan = tLatest - tEarliest;
+        let tStart = Math.max(tEarliest, tLatest - totalTimeSpan);
 
-        // Intelligent Edge Triggering:
-        // Automatically calculate midpoint of the active channel to lock both AC and DC-offset signals (e.g. rectifier ripple)
-        if (N > 15) {
-          const effectiveTrigLevel =
-            Math.abs(triggerLevel) > 0.05
-              ? triggerLevel
-              : (measurements.vmax + measurements.vmin) / 2;
+        // Hardware-Style Intelligent Edge Triggering:
+        // Lock tStart <= tLatest - totalTimeSpan so the full 10-division window is always populated and completely stable
+        if (N > 15 && availableSpan >= totalTimeSpan) {
+          const isCurrentTrig = !showVoltage && showCurrent;
+          const trigKey = isCurrentTrig
+            ? (`i${activeChannelIndex}` as keyof ScopeSample)
+            : (`v${activeChannelIndex}` as keyof ScopeSample);
 
-          let foundTrigTime: number | null = null;
-          const minTime = Math.max(0, tLatest - 2.5 * totalTimeSpan);
-          const maxTime = tLatest - 0.2 * totalTimeSpan;
+          const trigVpp = isCurrentTrig
+            ? measurements.imax - measurements.imin
+            : measurements.vpp;
+          const trigMid = isCurrentTrig
+            ? (measurements.imax + measurements.imin) / 2
+            : (measurements.vmax + measurements.vmin) / 2;
 
-          let endSearchIdx = N - 2;
-          while (endSearchIdx > 0 && samples[endSearchIdx].time > maxTime) {
-            endSearchIdx--;
-          }
+          // Only attempt periodic edge trigger if there is meaningful AC swing
+          if (trigVpp > (isCurrentTrig ? 0.0005 : 0.05)) {
+            const effectiveTrigLevel =
+              !isCurrentTrig && Math.abs(triggerLevel) > 0.05
+                ? triggerLevel
+                : trigMid;
 
-          const activeVKey = `v${activeChannelIndex}` as keyof ScopeSample;
-          for (let i = endSearchIdx; i >= 1; i--) {
-            if (samples[i].time < minTime) break;
-            const vPrev = (samples[i - 1][activeVKey] as number) ?? (samples[i - 1].v0 as number) ?? 0;
-            const vCurr = (samples[i][activeVKey] as number) ?? (samples[i].v0 as number) ?? 0;
+            const maxTrigTime = tLatest - totalTimeSpan;
+            const minTrigTime = Math.max(tEarliest, tLatest - 3.0 * totalTimeSpan);
 
-            const isEdge =
-              triggerEdge === 'rising'
-                ? vPrev < effectiveTrigLevel && vCurr >= effectiveTrigLevel
-                : vPrev > effectiveTrigLevel && vCurr <= effectiveTrigLevel;
-
-            if (isEdge) {
-              foundTrigTime = samples[i].time;
-              break;
+            let endSearchIdx = N - 1;
+            while (endSearchIdx > 1 && samples[endSearchIdx].time > maxTrigTime) {
+              endSearchIdx--;
             }
-          }
 
-          if (foundTrigTime !== null) {
-            tStart = foundTrigTime;
+            let foundTrigTime: number | null = null;
+            for (let i = endSearchIdx; i >= 1; i--) {
+              if (samples[i].time < minTrigTime) break;
+              const prevS = samples[i - 1];
+              const currS = samples[i];
+              const valPrev =
+                (prevS[trigKey] as number) ??
+                (isCurrentTrig ? prevS.i0 ?? 0 : prevS.v0 ?? prevS.v ?? 0);
+              const valCurr =
+                (currS[trigKey] as number) ??
+                (isCurrentTrig ? currS.i0 ?? 0 : currS.v0 ?? currS.v ?? 0);
+
+              const isEdge =
+                triggerEdge === 'rising'
+                  ? valPrev < effectiveTrigLevel && valCurr >= effectiveTrigLevel
+                  : valPrev > effectiveTrigLevel && valCurr <= effectiveTrigLevel;
+
+              if (isEdge) {
+                // Linear sub-sample interpolation eliminates horizontal phase jitter
+                const dv = valCurr - valPrev;
+                const frac = Math.abs(dv) > 1e-12 ? (effectiveTrigLevel - valPrev) / dv : 0;
+                foundTrigTime =
+                  prevS.time + Math.max(0, Math.min(1, frac)) * (currS.time - prevS.time);
+                break;
+              }
+            }
+
+            if (foundTrigTime !== null) {
+              tStart = foundTrigTime;
+            }
           }
         }
 
         const voltsPerPixel = voltsPerDiv / dy;
         const currentScalePerPixel = (voltsPerDiv * 0.01) / dy; // 10mA equivalent per Volt div
 
-        // Render each active probed channel (up to 3)
-        const channelsToRender =
-          probes.length > 0
-            ? probes
-            : [
-                {
-                  id: 'default',
-                  targetId: 'default',
-                  type: 'component' as const,
-                  name: 'Signal',
-                  color: CHANNEL_DEFAULT_COLORS[0],
-                  channelIndex: 0,
-                },
-              ];
+        // Helper for silky-smooth anti-aliased curve rendering inside graticule bounds
+        const drawSmoothTrace = (
+          pts: { x: number; y: number }[],
+          color: string,
+          lineWidth: number,
+          dashed: boolean
+        ) => {
+          if (pts.length < 2) return;
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(leftMargin, 0, gridWidth, height);
+          ctx.clip();
+
+          ctx.strokeStyle = color;
+          ctx.lineWidth = lineWidth;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.shadowColor = color;
+          ctx.shadowBlur = lineWidth > 2 ? 5 : 3;
+          ctx.setLineDash(dashed ? [4, 3] : []);
+
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          if (pts.length === 2) {
+            ctx.lineTo(pts[1].x, pts[1].y);
+          } else {
+            for (let k = 1; k < pts.length - 1; k++) {
+              const xc = (pts[k].x + pts[k + 1].x) * 0.5;
+              const yc = (pts[k].y + pts[k + 1].y) * 0.5;
+              ctx.quadraticCurveTo(pts[k].x, pts[k].y, xc, yc);
+            }
+            ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+          }
+          ctx.stroke();
+          ctx.restore();
+
+          // Terminal cursor dot on right edge
+          const lastPt = pts[pts.length - 1];
+          const edgeX = Math.max(leftMargin, Math.min(width - 4, lastPt.x));
+          const edgeY = Math.max(3, Math.min(height - 3, lastPt.y));
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(edgeX, edgeY, lineWidth > 2 ? 3.5 : 3, 0, Math.PI * 2);
+          ctx.fill();
+        };
+
+        const channelsToRender = probes;
 
         const isMultiProbe = channelsToRender.length > 1;
+        const tEndWindow = tStart + totalTimeSpan;
+
+        // Find first index slightly before tStart for seamless left-edge entry
+        let loopStartIdx = 0;
+        for (let i = 0; i < N; i++) {
+          if (samples[i].time >= tStart) {
+            loopStartIdx = Math.max(0, i - 1);
+            break;
+          }
+        }
 
         channelsToRender.forEach((probe, pIdx) => {
           const chIdx = probe.channelIndex ?? pIdx;
@@ -418,117 +485,55 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           const vKey = `v${chIdx}` as keyof ScopeSample;
           const iKey = `i${chIdx}` as keyof ScopeSample;
 
-          let lastX = 0;
-          let lastY = 0;
-
           // 1. Render Voltage Trace
           if (showVoltage) {
-            ctx.strokeStyle = color;
-            ctx.lineWidth = chIdx === activeChannelIndex ? 2.4 : 1.8;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.shadowColor = color;
-            ctx.shadowBlur = chIdx === activeChannelIndex ? 6 : 3;
-            ctx.setLineDash([]);
-            ctx.beginPath();
-
-            let hasMoved = false;
-            for (let i = 0; i < N; i++) {
+            const pts: { x: number; y: number }[] = [];
+            for (let i = loopStartIdx; i < N; i++) {
               const s = samples[i];
-              if (s.time < tStart - timebase * 0.1) continue;
-
               const rawV = (s[vKey] as number) ?? (chIdx === 0 ? s.v0 ?? s.v ?? 0 : 0);
               const v = coupling === 'ac' ? rawV - (measurements.vavg || 0) : rawV;
 
               const dt = s.time - tStart;
               const screenX = leftMargin + (dt / totalTimeSpan) * gridWidth;
-              if (screenX > width + 10) break;
-
-              const screenY = midY - (v / voltsPerPixel) - offsetY * dy;
+              const screenY = midY - v / voltsPerPixel - offsetY * dy;
               const clampedY = Math.max(2, Math.min(height - 2, screenY));
+              pts.push({ x: screenX, y: clampedY });
 
-              if (!hasMoved) {
-                ctx.moveTo(screenX, clampedY);
-                hasMoved = true;
-              } else {
-                ctx.lineTo(screenX, clampedY);
-              }
-              lastX = screenX;
-              lastY = clampedY;
+              if (s.time > tEndWindow) break;
             }
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            // Terminal cursor point on right edge (VoltSim style)
-            if (hasMoved && lastX >= leftMargin) {
-              ctx.fillStyle = color;
-              ctx.beginPath();
-              ctx.arc(Math.min(width - 4, lastX), lastY, 3.5, 0, Math.PI * 2);
-              ctx.fill();
-            }
+            drawSmoothTrace(pts, color, chIdx === activeChannelIndex ? 2.4 : 1.8, false);
           }
 
           // 2. Render Current Trace
           if (showCurrent) {
             const isBothSingle = !isMultiProbe && showVoltage;
             const currentColor = isBothSingle ? '#fbbf24' : color;
+            const pts: { x: number; y: number }[] = [];
 
-            ctx.strokeStyle = currentColor;
-            ctx.lineWidth = 1.8;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.shadowColor = currentColor;
-            ctx.shadowBlur = 4;
-            if (isBothSingle) {
-              ctx.setLineDash([4, 3]); // Dashed line for current when showing both
-            } else {
-              ctx.setLineDash([]);
-            }
-            ctx.beginPath();
-
-            let hasMoved = false;
-            let lastIX = 0;
-            let lastIY = 0;
-
-            for (let i = 0; i < N; i++) {
+            for (let i = loopStartIdx; i < N; i++) {
               const s = samples[i];
-              if (s.time < tStart - timebase * 0.1) continue;
-
               const rawI = (s[iKey] as number) ?? 0;
               const dt = s.time - tStart;
               const screenX = leftMargin + (dt / totalTimeSpan) * gridWidth;
-              if (screenX > width + 10) break;
-
-              const screenY = midY - (rawI / currentScalePerPixel) - offsetY * dy;
+              const screenY = midY - rawI / currentScalePerPixel - offsetY * dy;
               const clampedY = Math.max(2, Math.min(height - 2, screenY));
+              pts.push({ x: screenX, y: clampedY });
 
-              if (!hasMoved) {
-                ctx.moveTo(screenX, clampedY);
-                hasMoved = true;
-              } else {
-                ctx.lineTo(screenX, clampedY);
-              }
-              lastIX = screenX;
-              lastIY = clampedY;
+              if (s.time > tEndWindow) break;
             }
-            ctx.stroke();
-            ctx.setLineDash([]);
-            ctx.shadowBlur = 0;
-
-            if (hasMoved && lastIX >= leftMargin) {
-              ctx.fillStyle = currentColor;
-              ctx.beginPath();
-              ctx.arc(Math.min(width - 4, lastIX), lastIY, 3, 0, Math.PI * 2);
-              ctx.fill();
-            }
+            drawSmoothTrace(pts, currentColor, 1.9, isBothSingle);
           }
         });
       } else {
-        // Prompt if no samples
+        // Prompt if no probes selected or awaiting samples
         ctx.fillStyle = 'rgba(56, 189, 248, 0.75)';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Oscilloscope Measuring Signal', midX, midY - 8);
+        ctx.fillText(
+          probes.length === 0 ? 'No Channels Selected' : 'Oscilloscope Measuring Signal',
+          midX,
+          midY - 8
+        );
         ctx.fillStyle = 'rgba(148, 163, 184, 0.65)';
         ctx.font = '11px sans-serif';
         ctx.fillText('Select any component or wire to inspect its voltage & current', midX, midY + 12);
@@ -583,8 +588,15 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     };
 
     render();
-    animId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animId);
+    const ro = typeof ResizeObserver !== 'undefined' && canvasContainerRef.current
+      ? new ResizeObserver(() => render())
+      : null;
+    if (ro && canvasContainerRef.current) {
+      ro.observe(canvasContainerRef.current);
+    }
+    return () => {
+      ro?.disconnect();
+    };
   }, [
     samples,
     probes,
@@ -737,30 +749,34 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           <span className="text-[10px] uppercase font-mono text-[#64748b] tracking-wider shrink-0 font-semibold">
             Channels ({probes.length}/3):
           </span>
-          {probes.map((probe, idx) => {
-            const isActive = idx === activeChannelIndex;
-            return (
-              <div
-                key={probe.id + idx}
-                onClick={() => onSelectChannel(idx)}
-                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-mono transition-all cursor-pointer shrink-0 ${
-                  isActive
-                    ? 'bg-[#1b222d] text-white shadow-sm ring-1 ring-sky-500/20'
-                    : 'bg-[#15171e] text-[#8b909f] hover:text-[#dce0e8] hover:bg-[#1a1e27]'
-                }`}
-                style={{
-                  borderColor: isActive ? probe.color : '#252932',
-                }}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0 shadow-sm"
-                  style={{ backgroundColor: probe.color, boxShadow: `0 0 6px ${probe.color}` }}
-                />
-                <span className="font-semibold text-[10px] text-slate-400">CH{idx + 1}:</span>
-                <span className="truncate max-w-[100px] sm:max-w-[160px] font-medium text-[#f1f5f9]">
-                  {probe.name}
-                </span>
-                {probes.length > 1 && (
+          {probes.length === 0 ? (
+            <span className="text-[11px] font-mono text-[#64748b] italic">
+              None — select any component or wire on canvas
+            </span>
+          ) : (
+            probes.map((probe, idx) => {
+              const isActive = idx === activeChannelIndex;
+              return (
+                <div
+                  key={probe.id + idx}
+                  onClick={() => onSelectChannel(idx)}
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[11px] font-mono transition-all cursor-pointer shrink-0 ${
+                    isActive
+                      ? 'bg-[#1b222d] text-white shadow-sm ring-1 ring-sky-500/20'
+                      : 'bg-[#15171e] text-[#8b909f] hover:text-[#dce0e8] hover:bg-[#1a1e27]'
+                  }`}
+                  style={{
+                    borderColor: isActive ? probe.color : '#252932',
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 shadow-sm"
+                    style={{ backgroundColor: probe.color, boxShadow: `0 0 6px ${probe.color}` }}
+                  />
+                  <span className="font-semibold text-[10px] text-slate-400">CH{idx + 1}:</span>
+                  <span className="truncate max-w-[100px] sm:max-w-[160px] font-medium text-[#f1f5f9]">
+                    {probe.name}
+                  </span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -771,10 +787,10 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
                   >
                     <X className="w-2.5 h-2.5" />
                   </button>
-                )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })
+          )}
         </div>
 
         <span className="text-[10px] text-[#64748b] hidden md:inline shrink-0 font-mono">
@@ -800,20 +816,25 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
               <div
                 className="flex items-center gap-1.5 px-2 py-0.5 rounded border font-semibold text-[10px]"
                 style={{
-                  backgroundColor: `${activeColor}15`,
-                  borderColor: `${activeColor}40`,
-                  color: activeColor,
+                  backgroundColor: probes.length > 0 ? `${activeColor}15` : '#1a1d24',
+                  borderColor: probes.length > 0 ? `${activeColor}40` : '#282c36',
+                  color: probes.length > 0 ? activeColor : '#64748b',
                 }}
               >
-                <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: activeColor }} />
-                <span>{activeProbe?.name || 'Channel 1'}</span>
+                <span
+                  className="w-2 h-2 rounded-sm"
+                  style={{ backgroundColor: probes.length > 0 ? activeColor : '#475569' }}
+                />
+                <span>{activeProbe?.name || 'No Probe'}</span>
               </div>
 
               {/* VoltSim Max Pill */}
               <div className="flex items-center gap-1 bg-[#1a1d24] px-2 py-0.5 rounded border border-[#282c36]">
                 <span className="text-[#8b909f] font-sans text-[10px]">Max</span>
                 <span className="font-bold text-[#e2e8f0]">
-                  {showCurrent && !showVoltage
+                  {probes.length === 0
+                    ? '--'
+                    : showCurrent && !showVoltage
                     ? formatCurrent(measurements.imax)
                     : formatVoltage(measurements.vmax)}
                 </span>
@@ -823,7 +844,9 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
               <div className="flex items-center gap-1 bg-[#1a1d24] px-2 py-0.5 rounded border border-[#282c36]">
                 <span className="text-[#8b909f] font-sans text-[10px]">Min</span>
                 <span className="font-bold text-[#e2e8f0]">
-                  {showCurrent && !showVoltage
+                  {probes.length === 0
+                    ? '--'
+                    : showCurrent && !showVoltage
                     ? formatCurrent(measurements.imin)
                     : formatVoltage(measurements.vmin)}
                 </span>
@@ -833,7 +856,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
               <div className="flex items-center gap-1 bg-[#1a1d24] px-2 py-0.5 rounded border border-[#282c36]">
                 <span className="text-[#8b909f] font-sans text-[10px]">Freq</span>
                 <span className="font-bold text-sky-400">
-                  {measurements.freq > 0 ? `${measurements.freq.toFixed(1)} Hz` : '--'}
+                  {probes.length > 0 && measurements.freq > 0 ? `${measurements.freq.toFixed(1)} Hz` : '--'}
                 </span>
               </div>
 
@@ -841,7 +864,9 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
               <div className="flex items-center gap-1 bg-[#1a1d24] px-2 py-0.5 rounded border border-[#282c36]">
                 <span className="text-[#8b909f] font-sans text-[10px]">RMS</span>
                 <span className="font-bold text-amber-400">
-                  {showCurrent && !showVoltage
+                  {probes.length === 0
+                    ? '--'
+                    : showCurrent && !showVoltage
                     ? formatCurrent(measurements.irms)
                     : formatVoltage(measurements.vrms)}
                 </span>

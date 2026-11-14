@@ -143,23 +143,6 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <span className="hidden sm:inline">Restart</span>
         </button>
 
-        {/* Oscilloscope Graph Button - Appears only when a component is selected */}
-        {selectedComponentName && (
-          <button
-            onClick={onToggleScope}
-            title={`Oscilloscope: Inspect waveform across terminals of ${selectedComponentName}`}
-            aria-label={`Oscilloscope for ${selectedComponentName}`}
-            className={`px-2 sm:px-2.5 py-1.5 rounded-md border flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer shrink-0 ${
-              isScopeOpen
-                ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8] shadow-sm'
-                : 'bg-[#18202d] border-[#25364e] hover:bg-[#1f2b3e] text-[#38bdf8]'
-            }`}
-          >
-            <Activity className="w-3.5 h-3.5 text-[#38bdf8] animate-pulse" />
-            <span className="hidden md:inline">Scope</span>
-          </button>
-        )}
-
         <div className="h-4 w-px bg-[#262832] mx-0.5 shrink-0" />
 
         {/* Undo / Redo */}

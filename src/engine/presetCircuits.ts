@@ -36,7 +36,7 @@ export function getPresetCircuits(): CircuitPreset[] {
   ];
 
   // 2. RLC Resonant Tank (Damped Oscillation Ringing)
-  const rlcClock = createComponent('clock_source', 180, 300, { voltage: 5, frequency: 50, dutyCycle: 0.5 });
+  const rlcClock = createComponent('pulse_gen', 180, 300, { voltage: 5, frequency: 50, dutyCycle: 0.5 });
   const rlcResistor = createComponent('resistor', 320, 240, { resistance: 47 });
   const rlcInductor = createComponent('inductor', 460, 240, { inductance: 10e-3 }); // 10mH
   const rlcCapacitor = createComponent('capacitor', 600, 320, { capacitance: 1e-6 }); // 1µF
@@ -125,7 +125,7 @@ export function getPresetCircuits(): CircuitPreset[] {
 
   // 6. Transistor BJT Switch / LED Driver
   const bjtVcc = createComponent('dc_source', 180, 180, { voltage: 9 });
-  const bjtClock = createComponent('clock_source', 180, 360, { voltage: 5, frequency: 2, dutyCycle: 0.5 });
+  const bjtClock = createComponent('pulse_gen', 180, 360, { voltage: 5, frequency: 2, dutyCycle: 0.5 });
   const bjtRb = createComponent('resistor', 340, 360, { resistance: 4700 });
   const bjtNpn = createComponent('npn', 460, 320);
   const bjtRc = createComponent('resistor', 480, 180, { resistance: 330 });

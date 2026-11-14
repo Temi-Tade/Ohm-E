@@ -113,6 +113,38 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                 )}
               </div>
             )}
+
+            {/* Transformer Secondary Telemetry */}
+            {selectedComponent.type === 'transformer' && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] grid grid-cols-2 gap-2 text-[11px] font-mono">
+                <div className="bg-[#121317] p-1.5 rounded border border-[#22242e]">
+                  <span className="text-[#717684] text-[10px] block font-sans">Secondary V</span>
+                  <span className="text-sky-300 font-bold">
+                    {formatVoltage(selectedComponent.state.secondaryVoltage ?? 0)}
+                  </span>
+                </div>
+                <div className="bg-[#121317] p-1.5 rounded border border-[#22242e]">
+                  <span className="text-[#717684] text-[10px] block font-sans">Secondary I</span>
+                  <span className="text-emerald-300 font-bold">
+                    {formatCurrent(selectedComponent.state.secondaryCurrent ?? 0)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Relay Coil Contact Status */}
+            {selectedComponent.type === 'relay' && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Contact State:</span>
+                <span
+                  className={`font-mono font-bold ${
+                    selectedComponent.state.energized ? 'text-emerald-400' : 'text-amber-400'
+                  }`}
+                >
+                  {selectedComponent.state.energized ? 'ENERGIZED (COM → NO)' : 'IDLE (COM → NC)'}
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -467,47 +499,291 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
               </div>
             )}
 
-            {/* Pulse Clock Editor */}
-            {selectedComponent.type === 'clock_source' && (
+            {/* Square Wave Generator Editor */}
+            {selectedComponent.type === 'square_wave' && (
               <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-[#8b909f]">Pulse Clock:</span>
-                  <span className="font-mono text-purple-400 font-bold">
-                    {selectedComponent.params.voltage ?? 5}V @ {selectedComponent.params.frequency ?? 10}Hz
+                  <span className="text-[#8b909f]">Square Wave:</span>
+                  <span className="font-mono text-amber-400 font-bold">
+                    ±{selectedComponent.params.voltage ?? 5}V @ {selectedComponent.params.frequency ?? 50}Hz
                   </span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Peak Amp</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.1"
+                        value={selectedComponent.params.voltage ?? 5}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { voltage: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-amber-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Frequency</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.1"
+                        value={selectedComponent.params.frequency ?? 50}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { frequency: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-amber-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Hz</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#717684] block mb-0.5">DC Offset</span>
                   <div className="relative">
                     <input
                       type="number"
-                      step="any"
-                      min="0.1"
-                      value={selectedComponent.params.voltage ?? 5}
+                      step="0.5"
+                      value={selectedComponent.params.dcOffset ?? 0}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val > 0) {
-                          onUpdateComponentParams(selectedComponent.id, { voltage: val });
+                        if (!isNaN(val)) {
+                          onUpdateComponentParams(selectedComponent.id, { dcOffset: val });
                         }
                       }}
-                      className="w-full bg-[#121317] border border-[#2d313b] focus:border-purple-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      className="w-full bg-[#121317] border border-[#2d313b] focus:border-amber-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
                     />
                     <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Pulse Wave Generator Editor (with Editable Duty Cycle) */}
+            {selectedComponent.type === 'pulse_gen' && (
+              <div className="space-y-2.5 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Pulse Wave Gen:</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {selectedComponent.params.voltage ?? 5}V • {selectedComponent.params.frequency ?? 50}Hz • {Math.round((selectedComponent.params.dutyCycle ?? 0.5) * 100)}%
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">High Voltage</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.1"
+                        value={selectedComponent.params.voltage ?? 5}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { voltage: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-cyan-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Frequency</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="any"
+                        min="0.1"
+                        value={selectedComponent.params.frequency ?? 50}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { frequency: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-cyan-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Hz</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Duty Cycle Control */}
+                <div className="space-y-1.5 pt-1 border-t border-[#252831]">
+                  <div className="flex justify-between items-center text-[11px]">
+                    <span className="text-[#8b909f]">Duty Cycle:</span>
+                    <span className="font-mono text-cyan-300 font-bold">
+                      {Math.round((selectedComponent.params.dutyCycle ?? 0.5) * 100)}%
+                    </span>
                   </div>
                   <div className="relative">
                     <input
                       type="number"
-                      step="any"
-                      min="0.1"
-                      value={selectedComponent.params.frequency ?? 10}
+                      step="1"
+                      min="1"
+                      max="99"
+                      value={Math.round((selectedComponent.params.dutyCycle ?? 0.5) * 100)}
                       onChange={(e) => {
                         const val = parseFloat(e.target.value);
-                        if (!isNaN(val) && val > 0) {
-                          onUpdateComponentParams(selectedComponent.id, { frequency: val });
+                        if (!isNaN(val)) {
+                          const clamped = Math.min(99, Math.max(1, val));
+                          onUpdateComponentParams(selectedComponent.id, { dutyCycle: clamped / 100 });
                         }
                       }}
-                      className="w-full bg-[#121317] border border-[#2d313b] focus:border-purple-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      className="w-full bg-[#121317] border border-[#2d313b] focus:border-cyan-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
                     />
-                    <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Hz</span>
+                    <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="99"
+                    step="1"
+                    value={Math.round((selectedComponent.params.dutyCycle ?? 0.5) * 100)}
+                    onChange={(e) =>
+                      onUpdateComponentParams(selectedComponent.id, {
+                        dutyCycle: parseInt(e.target.value, 10) / 100,
+                      })
+                    }
+                    className="w-full accent-cyan-400 cursor-pointer h-5"
+                  />
+                  <div className="grid grid-cols-5 gap-1">
+                    {[10, 25, 50, 75, 90].map((dPct) => (
+                      <button
+                        key={dPct}
+                        onClick={() =>
+                          onUpdateComponentParams(selectedComponent.id, { dutyCycle: dPct / 100 })
+                        }
+                        className={`py-1 rounded text-[10px] font-mono border cursor-pointer transition-colors ${
+                          Math.round((selectedComponent.params.dutyCycle ?? 0.5) * 100) === dPct
+                            ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500'
+                            : 'bg-[#15171b] hover:bg-[#20232a] text-[#8b909f] border-[#252830]'
+                        }`}
+                      >
+                        {dPct}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Transformer Ratio & Winding Editor */}
+            {selectedComponent.type === 'transformer' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Turns Ratio (Ns / Np):</span>
+                  <span className="font-mono text-sky-400 font-bold">
+                    {(selectedComponent.params.turnsRatio ?? 1.0).toFixed(2)}x
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.05"
+                    max="20"
+                    value={selectedComponent.params.turnsRatio ?? 1.0}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0) {
+                        onUpdateComponentParams(selectedComponent.id, { turnsRatio: val });
+                      }
+                    }}
+                    className="w-full bg-[#121317] border border-[#2d313b] focus:border-sky-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                  />
+                  <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Ns/Np</span>
+                </div>
+                <div className="grid grid-cols-5 gap-1 pt-0.5">
+                  {[
+                    { label: '10:1', val: 0.1 },
+                    { label: '2:1', val: 0.5 },
+                    { label: '1:1', val: 1.0 },
+                    { label: '1:2', val: 2.0 },
+                    { label: '1:10', val: 10.0 },
+                  ].map((rPreset) => (
+                    <button
+                      key={rPreset.label}
+                      onClick={() =>
+                        onUpdateComponentParams(selectedComponent.id, { turnsRatio: rPreset.val })
+                      }
+                      className={`py-1 rounded text-[10px] font-mono border cursor-pointer transition-colors ${
+                        Math.abs((selectedComponent.params.turnsRatio ?? 1.0) - rPreset.val) < 0.01
+                          ? 'bg-sky-500/20 text-sky-300 border-sky-500'
+                          : 'bg-[#15171b] hover:bg-[#20232a] text-[#8b909f] border-[#252830]'
+                      }`}
+                    >
+                      {rPreset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Relay Coil & Threshold Editor */}
+            {selectedComponent.type === 'relay' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Relay Coil Settings:</span>
+                  <span
+                    className={`font-mono font-bold ${
+                      selectedComponent.state?.energized ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    {selectedComponent.state?.energized ? 'ON' : 'OFF'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Pickup V</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0.5"
+                        max="48"
+                        value={selectedComponent.params.pickupVoltage ?? 3.5}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { pickupVoltage: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Coil R</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="10"
+                        min="10"
+                        max="5000"
+                        value={selectedComponent.params.coilResistance ?? 100}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val >= 1) {
+                            onUpdateComponentParams(selectedComponent.id, { coilResistance: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Ω</span>
+                    </div>
                   </div>
                 </div>
               </div>

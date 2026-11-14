@@ -159,6 +159,59 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
         </g>
       );
 
+    case 'transformer': {
+      const ratio = params.turnsRatio ?? 1.0;
+      const ratioText =
+        ratio >= 1
+          ? `1:${Number(ratio.toFixed(2))}`
+          : `${Number((1 / Math.max(ratio, 0.01)).toFixed(2))}:1`;
+      return (
+        <g className="select-none">
+          {/* Primary leads P1(-40,-20), P2(-40,20) */}
+          <line x1="-40" y1="-20" x2="-14" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-14" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Primary Winding Coils (vertical arcs bulging toward core) */}
+          <path
+            d="M -14 -20 A 6 5 0 0 1 -14 -10 A 6 5 0 0 1 -14 0 A 6 5 0 0 1 -14 10 A 6 5 0 0 1 -14 20"
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+          />
+
+          {/* Laminated Iron Core Bars */}
+          <line x1="-2" y1="-22" x2="-2" y2="22" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" />
+          <line x1="2" y1="-22" x2="2" y2="22" stroke="#94a3b8" strokeWidth="2.2" strokeLinecap="round" />
+
+          {/* Secondary Winding Coils */}
+          <path
+            d="M 14 -20 A 6 5 0 0 0 14 -10 A 6 5 0 0 0 14 0 A 6 5 0 0 0 14 10 A 6 5 0 0 0 14 20"
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+          />
+          {/* Secondary leads S1(40,-20), S2(40,20) */}
+          <line x1="14" y1="-20" x2="40" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="14" y1="20" x2="40" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+
+          {/* Polarity dots */}
+          <circle cx="-22" cy="-13" r="2" fill="#38bdf8" />
+          <circle cx="22" cy="-13" r="2" fill="#38bdf8" />
+
+          <UprightText
+            x={0}
+            y={-27}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-sky-300 text-[10px] font-mono pointer-events-none select-none font-semibold"
+          >
+            {ratioText}
+          </UprightText>
+        </g>
+      );
+    }
+
     case 'dc_source':
       return (
         <g className="select-none">
@@ -209,30 +262,61 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
         </g>
       );
 
-    case 'clock_source':
+    case 'square_wave':
       return (
         <g className="select-none">
           <line x1="-40" y1="0" x2="-20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
           <line x1="20" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
-          <rect x="-20" y="-18" width="40" height="36" rx="4" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
-          {/* Square wave inside */}
+          <circle cx="0" cy="0" r="20" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Symmetrical Bipolar Square Wave */}
           <path
-            d="M -12 6 L -6 6 L -6 -6 L 2 -6 L 2 6 L 10 6 L 10 -6"
+            d="M -12 5 L -7 5 L -7 -6 L 0 -6 L 0 6 L 7 6 L 7 -6 L 12 -6"
             fill="none"
-            stroke="#a855f7"
-            strokeWidth="2"
+            stroke="#f59e0b"
+            strokeWidth="2.2"
+            strokeLinecap="square"
+            strokeLinejoin="miter"
           />
           <UprightText
             x={0}
-            y={-22}
+            y={-25}
             rot={rot}
             textAnchor="middle"
-            className="fill-purple-400 text-[10px] font-mono pointer-events-none select-none font-semibold"
+            className="fill-amber-400 text-[10px] font-mono pointer-events-none select-none font-semibold"
           >
-            CLK {params.frequency ?? 10}Hz
+            SQ {params.voltage ?? 5}V {params.frequency ?? 50}Hz
           </UprightText>
         </g>
       );
+
+    case 'pulse_gen': {
+      const duty = Math.min(Math.max(params.dutyCycle ?? 0.5, 0.05), 0.95);
+      const pulseW = 22 * duty;
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="0" x2="-21" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="21" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <rect x="-21" y="-19" width="42" height="38" rx="6" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Dynamic Pulse Wave reflecting live Duty Cycle */}
+          <path
+            d={`M -14 7 L -10 7 L -10 -7 L ${(-10 + pulseW).toFixed(1)} -7 L ${(-10 + pulseW).toFixed(1)} 7 L 14 7`}
+            fill="none"
+            stroke="#22d3ee"
+            strokeWidth="2.2"
+            strokeLinecap="square"
+          />
+          <UprightText
+            x={0}
+            y={-24}
+            rot={rot}
+            textAnchor="middle"
+            className="fill-cyan-400 text-[10px] font-mono pointer-events-none select-none font-semibold"
+          >
+            {params.frequency ?? 50}Hz • {Math.round((params.dutyCycle ?? 0.5) * 100)}%
+          </UprightText>
+        </g>
+      );
+    }
 
     case 'ground':
       return (
@@ -686,6 +770,99 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             fillOpacity="0.0001"
             pointerEvents="all"
           />
+        </g>
+      );
+    }
+
+    case 'relay': {
+      const isEnergized = state?.energized ?? params.energized ?? false;
+      const coilColor = isEnergized ? '#38bdf8' : strokeColor;
+      const armTargetY = isEnergized ? 26 : -26;
+      return (
+        <g className="select-none">
+          {/* Housing Package */}
+          <rect
+            x="-30"
+            y="-44"
+            width="60"
+            height="88"
+            rx="6"
+            fill="#0f172a"
+            stroke={isSelected ? '#38bdf8' : '#334155'}
+            strokeWidth={isSelected ? 2 : 1.5}
+          />
+
+          {/* Coil leads A1(-40,-20), A2(-40,20) */}
+          <line x1="-40" y1="-20" x2="-20" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-20" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-20" y1="-20" x2="-15" y2="-16" stroke={coilColor} strokeWidth={strokeWidth} />
+          <line x1="-20" y1="20" x2="-15" y2="16" stroke={coilColor} strokeWidth={strokeWidth} />
+
+          {/* Electromagnet Coil */}
+          <rect
+            x="-23"
+            y="-16"
+            width="14"
+            height="32"
+            rx="2"
+            fill={isEnergized ? 'rgba(56, 189, 248, 0.2)' : '#1e293b'}
+            stroke={coilColor}
+            strokeWidth="1.8"
+          />
+          <line x1="-23" y1="-6" x2="-9" y2="4" stroke={coilColor} strokeWidth="1.4" />
+          <line x1="-23" y1="4" x2="-9" y2="-6" stroke={coilColor} strokeWidth="1.4" />
+
+          {/* Mechanical Magnetic Linkage (dashed) */}
+          <line
+            x1="-9"
+            y1="0"
+            x2="13"
+            y2="0"
+            stroke={isEnergized ? '#38bdf8' : '#475569'}
+            strokeWidth="1.3"
+            strokeDasharray="3,2"
+          />
+
+          {/* Contact Terminals: NC(40,-40), COM(40,0), NO(40,40) */}
+          <line x1="12" y1="-32" x2="22" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="22" y1="-40" x2="40" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="11" cy="-29" r="3" fill={!isEnergized ? '#f59e0b' : '#0f172a'} stroke={!isEnergized ? '#fbbf24' : '#64748b'} strokeWidth="1.5" />
+
+          <line x1="24" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="24" cy="0" r="3" fill="#0f172a" stroke={strokeColor} strokeWidth="1.5" />
+
+          <line x1="12" y1="32" x2="22" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="22" y1="40" x2="40" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="11" cy="29" r="3" fill={isEnergized ? '#10b981' : '#0f172a'} stroke={isEnergized ? '#34d399' : '#64748b'} strokeWidth="1.5" />
+
+          {/* Switched Contact Blade */}
+          <line
+            x1="24"
+            y1="0"
+            x2="11"
+            y2={armTargetY}
+            stroke={isEnergized ? '#10b981' : '#f59e0b'}
+            strokeWidth="2.6"
+            strokeLinecap="round"
+          />
+
+          {/* Pin Annotations */}
+          <UprightText x={-26} y={-24} rot={rot} className="fill-slate-400 text-[8px] font-mono font-bold">+</UprightText>
+          <UprightText x={-26} y={30} rot={rot} className="fill-slate-400 text-[8px] font-mono font-bold">−</UprightText>
+          <UprightText x={22} y={-28} rot={rot} textAnchor="end" className="fill-amber-400/90 text-[7.5px] font-mono font-bold">NC</UprightText>
+          <UprightText x={28} y={-5} rot={rot} textAnchor="end" className="fill-slate-300 text-[7.5px] font-mono font-bold">COM</UprightText>
+          <UprightText x={22} y={34} rot={rot} textAnchor="end" className="fill-emerald-400/90 text-[7.5px] font-mono font-bold">NO</UprightText>
+
+          {/* Status indicator dot & label */}
+          <circle cx="-22" cy="-35" r="2.8" fill={isEnergized ? '#10b981' : '#334155'} />
+          <UprightText
+            x={-16}
+            y={-32}
+            rot={rot}
+            className={`text-[8px] font-mono font-bold ${isEnergized ? 'fill-emerald-400' : 'fill-slate-400'}`}
+          >
+            {isEnergized ? 'ON' : 'OFF'}
+          </UprightText>
         </g>
       );
     }

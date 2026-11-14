@@ -76,21 +76,43 @@ export function createComponent(
         },
       };
 
-    case 'clock_source':
+    case 'square_wave':
       return {
         id,
         type,
-        name: 'Pulse Clock',
+        name: 'Square Wave Gen',
         x,
         y,
         rotation: 0,
         pins: [
-          { id: `${id}_out`, name: 'OUT', label: 'CLK', x: 40, y: 0 },
+          { id: `${id}_p`, name: '+', label: 'OUT', x: 40, y: 0 },
+          { id: `${id}_n`, name: '-', label: '⏚', x: -40, y: 0 },
+        ],
+        params: {
+          voltage: 5.0,
+          dcOffset: 0.0,
+          frequency: 50.0,
+          phase: 0,
+          ...customParams,
+        },
+      };
+
+    case 'pulse_gen':
+      return {
+        id,
+        type,
+        name: 'Pulse Wave Gen',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_out`, name: 'OUT', label: 'OUT', x: 40, y: 0 },
           { id: `${id}_gnd`, name: 'GND', label: '⏚', x: -40, y: 0 },
         ],
         params: {
           voltage: 5.0,
-          frequency: 10.0,
+          lowVoltage: 0.0,
+          frequency: 50.0,
           dutyCycle: 0.5,
           ...customParams,
         },
@@ -183,6 +205,28 @@ export function createComponent(
         params: {
           inductance: 10e-3, // 10mH
           prevCurrent: 0,
+          ...customParams,
+        },
+      };
+
+    case 'transformer':
+      return {
+        id,
+        type,
+        name: 'Transformer',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_p1`, name: 'P1', label: 'P1', x: -40, y: -20 },
+          { id: `${id}_p2`, name: 'P2', label: 'P2', x: -40, y: 20 },
+          { id: `${id}_s1`, name: 'S1', label: 'S1', x: 40, y: -20 },
+          { id: `${id}_s2`, name: 'S2', label: 'S2', x: 40, y: 20 },
+        ],
+        params: {
+          turnsRatio: 1.0, // Ns / Np
+          windingResistance: 0.5,
+          inductance: 1.0, // 1H magnetizing inductance
           ...customParams,
         },
       };
@@ -379,6 +423,29 @@ export function createComponent(
         ],
         params: {
           pressed: false,
+          ...customParams,
+        },
+      };
+
+    case 'relay':
+      return {
+        id,
+        type,
+        name: 'SPDT Relay',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_c1`, name: 'COIL+', label: 'A1', x: -40, y: -20 },
+          { id: `${id}_c2`, name: 'COIL-', label: 'A2', x: -40, y: 20 },
+          { id: `${id}_nc`, name: 'NC', label: 'NC', x: 40, y: -40 },
+          { id: `${id}_com`, name: 'COM', label: 'COM', x: 40, y: 0 },
+          { id: `${id}_no`, name: 'NO', label: 'NO', x: 40, y: 40 },
+        ],
+        params: {
+          coilResistance: 100, // 100 ohm coil
+          pickupVoltage: 3.5, // Pull-in threshold (5V nominal coil)
+          energized: false,
           ...customParams,
         },
       };

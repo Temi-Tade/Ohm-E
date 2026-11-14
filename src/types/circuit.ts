@@ -6,12 +6,14 @@
 export type ComponentType =
   | 'dc_source'
   | 'ac_source'
-  | 'clock_source'
+  | 'square_wave'
+  | 'pulse_gen'
   | 'ground'
   | 'resistor'
   | 'potentiometer'
   | 'capacitor'
   | 'inductor'
+  | 'transformer'
   | 'diode'
   | 'zener_diode'
   | 'led'
@@ -22,6 +24,7 @@ export type ComponentType =
   | 'opamp'
   | 'switch'
   | 'push_button'
+  | 'relay'
   | 'buzzer'
   | 'voltmeter'
   | 'ammeter'
@@ -62,22 +65,29 @@ export interface CircuitComponent {
     audioFrequency?: number;
     vgs?: number;
     vds?: number;
+    energized?: boolean; // for Relay
+    secondaryVoltage?: number; // for Transformer
+    secondaryCurrent?: number; // for Transformer
   };
 }
 
 export interface ComponentParams {
   // Sources
   voltage?: number; // V
-  frequency?: number; // Hz for AC / Clock
+  lowVoltage?: number; // Low level V for pulse generator
+  dcOffset?: number; // DC offset for square wave
+  frequency?: number; // Hz for AC / Square / Pulse / Clock
   phase?: number; // degrees
   waveform?: 'sine' | 'square' | 'triangle' | 'sawtooth';
-  dutyCycle?: number; // 0.0 - 1.0 for clock
+  dutyCycle?: number; // 0.0 - 1.0 for pulse/clock
 
   // Passives
   resistance?: number; // Ohms
   capacitance?: number; // Farads
   inductance?: number; // Henries
   wiper?: number; // 0.0 - 1.0 for potentiometer
+  turnsRatio?: number; // Ns / Np for transformer (e.g. 1.0, 0.5, 2.0)
+  windingResistance?: number; // Primary/secondary series winding R
 
   // Semiconductors
   forwardVoltage?: number; // V for diode/LED (e.g. 0.7V, 2.0V)
@@ -99,6 +109,9 @@ export interface ComponentParams {
   // Controls
   closed?: boolean; // for switch
   pressed?: boolean; // for push button
+  coilResistance?: number; // Ohms for relay coil
+  pickupVoltage?: number; // Activation threshold V for relay
+  energized?: boolean; // Relay coil state
 
   // Sensors
   lux?: number; // 0 to 1000 lux for photoresistor

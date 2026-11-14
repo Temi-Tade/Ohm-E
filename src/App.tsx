@@ -59,31 +59,14 @@ export default function App() {
   const [showCurrent, setShowCurrent] = useState<boolean>(false);
   const [activeChannelIndex, setActiveChannelIndex] = useState<number>(0);
 
-  // Multi-channel probe configuration (up to 3 channels)
-  const [probes, setProbes] = useState<ScopeProbe[]>([
-    {
-      id: 'ch0',
-      type: 'component',
-      targetId: initialPreset.components[0]?.id ?? '',
-      name: initialPreset.components[0]?.name ?? 'CH 1',
-      color: '#f97316',
-      channelIndex: 0,
-    },
-    {
-      id: 'ch1',
-      type: 'component',
-      targetId: initialPreset.components[2]?.id ?? '',
-      name: initialPreset.components[2]?.name ?? 'CH 2',
-      color: '#06b6d4',
-      channelIndex: 1,
-    },
-  ]);
+  // Multi-channel probe configuration (up to 3 user-selected channels, empty until user selects)
+  const [probes, setProbes] = useState<ScopeProbe[]>([]);
   const probesRef = useRef<ScopeProbe[]>(probes);
   useEffect(() => {
     probesRef.current = probes;
   }, [probes]);
 
-  const lastProbedCompRef = useRef<CircuitComponent | null>(initialPreset.components[0] ?? null);
+  const lastProbedCompRef = useRef<CircuitComponent | null>(null);
 
   // Mobile drawer & modal state
   const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState<boolean>(false);
@@ -218,10 +201,10 @@ export default function App() {
       lastTimestamp = timestamp;
 
       if (isRunning) {
-        // dt = 0.0001 (100 us) allows smooth numerical integration up to 160 steps/frame (full real-time speed)
-        const dt = 0.0001;
-        const totalSimDelta = elapsedSec * simSpeed;
-        const numSteps = Math.min(Math.max(Math.round(totalSimDelta / dt), 1), 160);
+        // dt = 0.00005 (50 us) gives high-density smooth waveforms and accurate transient integration
+        const dt = 0.00005;
+        const totalSimDelta = elapsedSec * simSpeed * 0.35;
+        const numSteps = Math.min(Math.max(Math.round(totalSimDelta / dt), 1), 120);
 
         let lastResult: SimulationResult | null = null;
 
@@ -234,7 +217,7 @@ export default function App() {
             dt
           );
 
-          const targetSampleDt = Math.max(0.00005, (timebase * 10) / 1000);
+          const targetSampleDt = Math.max(0.00005, (timebase * 10) / 800);
           if (
             !isScopePaused &&
             (simTimeRef.current - lastScopeSampleTimeRef.current >= targetSampleDt ||
@@ -525,8 +508,20 @@ export default function App() {
       recordSnapshot();
       if (compToDelete) {
         const pinIds = new Set(compToDelete.pins.map((p) => p.id));
+        const deletedWireIds = new Set(
+          wires.filter((w) => pinIds.has(w.fromPinId) || pinIds.has(w.toPinId)).map((w) => w.id)
+        );
         setWires((prev) =>
           prev.filter((w) => !pinIds.has(w.fromPinId) && !pinIds.has(w.toPinId))
+        );
+        setProbes((prev) =>
+          prev
+            .filter((p) => p.targetId !== selectedComponentId && !deletedWireIds.has(p.targetId))
+            .map((p, idx) => ({
+              ...p,
+              channelIndex: idx,
+              color: CHANNEL_COLORS[idx] || '#f97316',
+            }))
         );
         if (lastProbedCompRef.current?.id === selectedComponentId) {
           lastProbedCompRef.current = null;
@@ -537,6 +532,15 @@ export default function App() {
     } else if (selectedWireId) {
       recordSnapshot();
       setWires((prev) => prev.filter((w) => w.id !== selectedWireId));
+      setProbes((prev) =>
+        prev
+          .filter((p) => p.targetId !== selectedWireId)
+          .map((p, idx) => ({
+            ...p,
+            channelIndex: idx,
+            color: CHANNEL_COLORS[idx] || '#f97316',
+          }))
+      );
       setSelectedWireId(null);
     }
   };
@@ -609,7 +613,6 @@ export default function App() {
 
   const handleRemoveProbe = useCallback((channelIdx: number) => {
     setProbes((prev) => {
-      if (prev.length <= 1) return prev; // Retain at least 1 probe
       const filtered = prev.filter((_, idx) => idx !== channelIdx);
       return filtered.map((p, idx) => ({
         ...p,
@@ -665,7 +668,7 @@ export default function App() {
     setWires(preset.wires);
     setSelectedComponentId(null);
     setSelectedWireId(null);
-    lastProbedCompRef.current = preset.components[0] ?? null;
+    lastProbedCompRef.current = null;
 
     if (preset.defaultScope?.timebase) {
       setTimebase(preset.defaultScope.timebase);
@@ -674,111 +677,9 @@ export default function App() {
       setVoltsPerDiv(preset.defaultScope.voltsPerDiv);
     }
 
-    // Configure multi-channel oscilloscope traces matching preset
-    if (preset.id === 'bridge_rectifier') {
-      const ac = preset.components.find((c) => c.type === 'ac_source');
-      const cap = preset.components.find((c) => c.type === 'capacitor');
-      const led = preset.components.find((c) => c.type === 'led');
-      const presetProbes: ScopeProbe[] = [];
-      if (ac) {
-        presetProbes.push({
-          id: 'ch0',
-          type: 'component',
-          targetId: ac.id,
-          name: 'AC 100Hz',
-          color: '#f97316',
-          channelIndex: 0,
-        });
-      }
-      if (cap) {
-        presetProbes.push({
-          id: 'ch1',
-          type: 'component',
-          targetId: cap.id,
-          name: '10 µF Cap',
-          color: '#06b6d4',
-          channelIndex: 1,
-        });
-      }
-      if (led) {
-        presetProbes.push({
-          id: 'ch2',
-          type: 'component',
-          targetId: led.id,
-          name: 'Red LED',
-          color: '#10b981',
-          channelIndex: 2,
-        });
-      }
-      setProbes(presetProbes);
-      setActiveChannelIndex(0);
-      setIsScopeOpen(true);
-    } else if (preset.id === 'rc_filter') {
-      const src = preset.components.find((c) => c.type === 'ac_source');
-      const cap = preset.components.find((c) => c.type === 'capacitor');
-      const presetProbes: ScopeProbe[] = [];
-      if (src) {
-        presetProbes.push({
-          id: 'ch0',
-          type: 'component',
-          targetId: src.id,
-          name: 'AC Input',
-          color: '#f97316',
-          channelIndex: 0,
-        });
-      }
-      if (cap) {
-        presetProbes.push({
-          id: 'ch1',
-          type: 'component',
-          targetId: cap.id,
-          name: 'V_out (Cap)',
-          color: '#06b6d4',
-          channelIndex: 1,
-        });
-      }
-      setProbes(presetProbes);
-      setActiveChannelIndex(0);
-    } else {
-      const p0 = preset.components[0];
-      const p1 = preset.components[2] ?? preset.components[1];
-      const presetProbes: ScopeProbe[] = [];
-      if (p0) {
-        presetProbes.push({
-          id: 'ch0',
-          type: 'component',
-          targetId: p0.id,
-          name: p0.name,
-          color: '#f97316',
-          channelIndex: 0,
-        });
-      }
-      if (p1 && preset.components.length > 2) {
-        presetProbes.push({
-          id: 'ch1',
-          type: 'component',
-          targetId: p1.id,
-          name: p1.name,
-          color: '#06b6d4',
-          channelIndex: 1,
-        });
-      }
-      setProbes(
-        presetProbes.length > 0
-          ? presetProbes
-          : [
-              {
-                id: 'ch0',
-                type: 'component',
-                targetId: '',
-                name: 'CH 1',
-                color: '#f97316',
-                channelIndex: 0,
-              },
-            ]
-      );
-      setActiveChannelIndex(0);
-    }
+    // Do not preselect components on the oscilloscope; only show user-selected components
+    setProbes([]);
+    setActiveChannelIndex(0);
   };
 
   // Clear Canvas
@@ -790,6 +691,8 @@ export default function App() {
     setScopeSamples([]);
     setComponents([]);
     setWires([]);
+    setProbes([]);
+    setActiveChannelIndex(0);
     setSelectedComponentId(null);
     setSelectedWireId(null);
     lastProbedCompRef.current = null;
@@ -852,7 +755,7 @@ export default function App() {
   const selectedWire = wires.find((w) => w.id === selectedWireId) || null;
 
   return (
-    <div className="flex flex-col h-screen h-[100dvh] w-screen overflow-hidden bg-[#101114] text-[#eceff4] font-sans">
+    <div className="fixed inset-0 flex flex-col w-full overflow-hidden bg-[#101114] text-[#eceff4] font-sans">
       {/* Top Application Toolbar */}
       <Toolbar
         isRunning={isRunning}
@@ -895,7 +798,7 @@ export default function App() {
       />
 
       {/* Main Workspace: Palette on Left, Canvas in Center, Inspector on Right */}
-      <div className="flex-1 flex overflow-hidden relative">
+      <div className="flex-1 flex min-h-0 overflow-hidden relative">
         {/* Component Palette Library (Desktop Sidebar & Mobile Slide-Over Drawer) */}
         <ComponentPalette
           onAddComponent={handleAddComponent}
@@ -903,178 +806,201 @@ export default function App() {
           onCloseMobile={() => setIsMobilePaletteOpen(false)}
         />
 
-        {/* Center Drag & Drop Schematic Canvas */}
+        {/* Center Drag & Drop Schematic Canvas + Bottom Docked Oscilloscope */}
         <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-          <CircuitCanvas
-            components={components}
-            wires={wires}
-            selectedComponentId={selectedComponentId}
-            selectedWireId={selectedWireId}
-            onSelectComponent={(id) => {
-              setSelectedComponentId(id);
-              if (id) {
-                setSelectedWireId(null);
-                if (isScopeOpen) {
-                  handleAutoProbeOnSelect(id, 'component');
-                }
-              }
-            }}
-            onSelectWire={(id) => {
-              setSelectedWireId(id);
-              if (id) {
-                setSelectedComponentId(null);
-                if (isScopeOpen) {
-                  handleAutoProbeOnSelect(id, 'wire');
-                }
-              }
-            }}
-            onUpdateComponentPosition={handleUpdateComponentPosition}
-            onRotateComponent={handleRotateComponent}
-            onDeleteSelected={handleDeleteSelected}
-            onAddWire={handleAddWire}
-            onToggleSwitch={handleToggleSwitch}
-            onTogglePushButton={handleTogglePushButton}
-            onPressPushButton={handlePressPushButton}
-            onWiperChange={handleWiperChange}
-            onConnectWireToWire={handleConnectWireToWire}
-            onUpdateComponentParams={handleUpdateComponentParams}
-            isRunning={isRunning}
-            flowMode={flowMode}
-            showVoltColors={showVoltColors}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          />
-
-          {/* Floating Action Toolbar for Selected Component (Icon-only to prevent overflow) */}
-          {selectedComp && (
-            <div className={`absolute ${isScopeOpen ? 'bottom-[295px]' : 'bottom-[max(1.75rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] sm:bottom-6'} left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-[#15171c]/95 backdrop-blur-md border border-[#2b2f3a] p-1 px-1.5 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]`}>
-              {/* Scope Graph Button */}
-              <button
-                onClick={() => handleToggleScopeForTarget(selectedComp, null)}
-                className={`w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg border flex items-center justify-center cursor-pointer transition-colors ${
-                  isScopeOpen
-                    ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8]'
-                    : 'bg-[#1a2332] hover:bg-[#223045] active:bg-[#151c27] border-[#2b4162] text-[#38bdf8]'
-                }`}
-                title="View on Multi-Channel Oscilloscope"
-                aria-label="Oscilloscope waveform"
-              >
-                <Activity className="w-4 h-4 text-[#38bdf8]" />
-              </button>
-
-              {/* Rotate Button */}
-              <button
-                onClick={() => handleRotateComponent(selectedComp.id)}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
-                title="Rotate Component (R)"
-                aria-label="Rotate Component"
-              >
-                <RotateCw className="w-4 h-4" />
-              </button>
-
-              {/* Edit / Inspect Parameters Button */}
-              <button
-                onClick={() => setIsMobileInspectorOpen(true)}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
-                title="Edit Component Parameters"
-                aria-label="Edit Parameters"
-              >
-                <Sliders className="w-4 h-4" />
-              </button>
-
-              {/* Duplicate Button */}
-              <button
-                onClick={() => handleDuplicateComponent(selectedComp)}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
-                title="Duplicate Component"
-                aria-label="Duplicate Component"
-              >
-                <Copy className="w-4 h-4" />
-              </button>
-
-              {/* Delete Button */}
-              <button
-                onClick={handleDeleteSelected}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#2a1b1f] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] border border-[#4a242a] flex items-center justify-center cursor-pointer transition-colors"
-                title="Delete Component (Del)"
-                aria-label="Delete Component"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-
-              <div className="h-4 w-px bg-[#2d313c] mx-0.5" />
-
-              {/* Deselect Button */}
-              <button
-                onClick={() => {
-                  setSelectedComponentId(null);
-                  setIsMobileInspectorOpen(false);
-                }}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] text-[#9ca3af] hover:text-white border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
-                title="Deselect (Esc)"
-                aria-label="Deselect"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-
-          {/* Floating Action Toolbar for Selected Wire (Icon-only to prevent overflow) */}
-          {selectedWire && !selectedComp && (
-            <div className={`absolute ${isScopeOpen ? 'bottom-[295px]' : 'bottom-[max(1.75rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] sm:bottom-6'} left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-[#15171c]/95 backdrop-blur-md border border-[#2b2f3a] p-1 px-1.5 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]`}>
-              <button
-                onClick={() => handleToggleScopeForTarget(null, selectedWire)}
-                className={`w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg border flex items-center justify-center cursor-pointer transition-colors ${
-                  isScopeOpen
-                    ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8]'
-                    : 'bg-[#1a2332] text-[#38bdf8] hover:bg-[#223045] border-[#2b4162]'
-                }`}
-                title="View Wire Voltage on Oscilloscope"
-                aria-label="Oscilloscope waveform"
-              >
-                <Activity className="w-4 h-4 text-[#38bdf8]" />
-              </button>
-              <button
-                onClick={() => setIsMobileInspectorOpen(true)}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] text-[#e4e7ee] hover:bg-[#292d36] border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
-                title="Wire Info"
-                aria-label="Wire Info"
-              >
-                <Sliders className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleDeleteSelected}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#2a1b1f] text-[#f87171] hover:bg-[#382025] border border-[#4a242a] flex items-center justify-center cursor-pointer transition-colors"
-                title="Delete Wire (Del)"
-                aria-label="Delete Wire"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => {
+          {/* Canvas Viewport Wrapper: floating buttons are anchored relative to THIS box (above Oscilloscope & never clipped by 100vh) */}
+          <div className="flex-1 flex flex-col relative min-h-0 overflow-hidden">
+            <CircuitCanvas
+              components={components}
+              wires={wires}
+              selectedComponentId={selectedComponentId}
+              selectedWireId={selectedWireId}
+              onSelectComponent={(id) => {
+                setSelectedComponentId(id);
+                if (id) {
                   setSelectedWireId(null);
-                  setIsMobileInspectorOpen(false);
-                }}
-                className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] text-[#9ca3af] hover:text-white border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
-                title="Deselect (Esc)"
-                aria-label="Deselect"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+                  if (isScopeOpen) {
+                    handleAutoProbeOnSelect(id, 'component');
+                  }
+                }
+              }}
+              onSelectWire={(id) => {
+                setSelectedWireId(id);
+                if (id) {
+                  setSelectedComponentId(null);
+                  if (isScopeOpen) {
+                    handleAutoProbeOnSelect(id, 'wire');
+                  }
+                }
+              }}
+              onUpdateComponentPosition={handleUpdateComponentPosition}
+              onRotateComponent={handleRotateComponent}
+              onDeleteSelected={handleDeleteSelected}
+              onAddWire={handleAddWire}
+              onToggleSwitch={handleToggleSwitch}
+              onTogglePushButton={handleTogglePushButton}
+              onPressPushButton={handlePressPushButton}
+              onWiperChange={handleWiperChange}
+              onConnectWireToWire={handleConnectWireToWire}
+              onUpdateComponentParams={handleUpdateComponentParams}
+              isRunning={isRunning}
+              flowMode={flowMode}
+              showVoltColors={showVoltColors}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            />
 
-          {/* Mobile Floating Add Button (Always accessible when palette drawer is closed) */}
-          {!isMobilePaletteOpen && (
-            <button
-              onClick={() => setIsMobilePaletteOpen(true)}
-              className={`md:hidden absolute ${isScopeOpen ? 'bottom-[295px]' : 'bottom-[max(1.75rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))]'} right-4 z-40 w-12 h-12 rounded-xl bg-[#1c2432] hover:bg-[#253246] active:bg-[#161c28] border border-[#2e405a] text-[#38bdf8] active:scale-95 shadow-2xl flex items-center justify-center font-bold text-2xl transition-all cursor-pointer`}
-              title="Add Component"
-              aria-label="Add Component"
-            >
-              +
-            </button>
-          )}
+            {/* Floating Action Toolbar for Selected Component */}
+            {selectedComp && (
+              <div
+                className={`absolute ${
+                  isScopeOpen
+                    ? 'bottom-3'
+                    : 'bottom-[max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] sm:bottom-6'
+                } left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-[#15171c]/95 backdrop-blur-md border border-[#2b2f3a] p-1 px-1.5 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]`}
+              >
+                {/* Scope Graph Button */}
+                <button
+                  onClick={() => handleToggleScopeForTarget(selectedComp, null)}
+                  className={`w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg border flex items-center justify-center cursor-pointer transition-colors ${
+                    isScopeOpen
+                      ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8]'
+                      : 'bg-[#1a2332] hover:bg-[#223045] active:bg-[#151c27] border-[#2b4162] text-[#38bdf8]'
+                  }`}
+                  title="View on Multi-Channel Oscilloscope"
+                  aria-label="Oscilloscope waveform"
+                >
+                  <Activity className="w-4 h-4 text-[#38bdf8]" />
+                </button>
+
+                {/* Rotate Button */}
+                <button
+                  onClick={() => handleRotateComponent(selectedComp.id)}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Rotate Component (R)"
+                  aria-label="Rotate Component"
+                >
+                  <RotateCw className="w-4 h-4" />
+                </button>
+
+                {/* Edit / Inspect Parameters Button */}
+                <button
+                  onClick={() => setIsMobileInspectorOpen(true)}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Edit Component Parameters"
+                  aria-label="Edit Parameters"
+                >
+                  <Sliders className="w-4 h-4" />
+                </button>
+
+                {/* Duplicate Button */}
+                <button
+                  onClick={() => handleDuplicateComponent(selectedComp)}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Duplicate Component"
+                  aria-label="Duplicate Component"
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+
+                {/* Delete Button */}
+                <button
+                  onClick={handleDeleteSelected}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#2a1b1f] hover:bg-[#382025] active:bg-[#221517] text-[#f87171] border border-[#4a242a] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Delete Component (Del)"
+                  aria-label="Delete Component"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+
+                <div className="h-4 w-px bg-[#2d313c] mx-0.5" />
+
+                {/* Deselect Button */}
+                <button
+                  onClick={() => {
+                    setSelectedComponentId(null);
+                    setIsMobileInspectorOpen(false);
+                  }}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] text-[#9ca3af] hover:text-white border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Deselect (Esc)"
+                  aria-label="Deselect"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Floating Action Toolbar for Selected Wire */}
+            {selectedWire && !selectedComp && (
+              <div
+                className={`absolute ${
+                  isScopeOpen
+                    ? 'bottom-3'
+                    : 'bottom-[max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] sm:bottom-6'
+                } left-1/2 -translate-x-1/2 z-40 flex items-center gap-1 bg-[#15171c]/95 backdrop-blur-md border border-[#2b2f3a] p-1 px-1.5 rounded-xl shadow-2xl text-xs text-[#e4e7ee] max-w-[95vw]`}
+              >
+                <button
+                  onClick={() => handleToggleScopeForTarget(null, selectedWire)}
+                  className={`w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg border flex items-center justify-center cursor-pointer transition-colors ${
+                    isScopeOpen
+                      ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8]'
+                      : 'bg-[#1a2332] text-[#38bdf8] hover:bg-[#223045] border-[#2b4162]'
+                  }`}
+                  title="View Wire Voltage on Oscilloscope"
+                  aria-label="Oscilloscope waveform"
+                >
+                  <Activity className="w-4 h-4 text-[#38bdf8]" />
+                </button>
+                <button
+                  onClick={() => setIsMobileInspectorOpen(true)}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] text-[#e4e7ee] hover:bg-[#292d36] border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Wire Info"
+                  aria-label="Wire Info"
+                >
+                  <Sliders className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#2a1b1f] text-[#f87171] hover:bg-[#382025] border border-[#4a242a] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Delete Wire (Del)"
+                  aria-label="Delete Wire"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedWireId(null);
+                    setIsMobileInspectorOpen(false);
+                  }}
+                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] text-[#9ca3af] hover:text-white border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
+                  title="Deselect (Esc)"
+                  aria-label="Deselect"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Mobile Floating Add Button (shifts cleanly above selection toolbar if one is visible so neither overlaps or clips) */}
+            {!isMobilePaletteOpen && (
+              <button
+                onClick={() => setIsMobilePaletteOpen(true)}
+                className={`md:hidden absolute ${
+                  selectedComp || selectedWire
+                    ? isScopeOpen
+                      ? 'bottom-16'
+                      : 'bottom-[max(4.5rem,calc(env(safe-area-inset-bottom,0px)+4.25rem))]'
+                    : isScopeOpen
+                    ? 'bottom-3'
+                    : 'bottom-[max(1rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))]'
+                } right-3 z-40 w-12 h-12 rounded-xl bg-[#1c2432] hover:bg-[#253246] active:bg-[#161c28] border border-[#2e405a] text-[#38bdf8] active:scale-95 shadow-2xl flex items-center justify-center font-bold text-2xl transition-all cursor-pointer`}
+                title="Add Component"
+                aria-label="Add Component"
+              >
+                +
+              </button>
+            )}
+          </div>
 
           {/* Bottom Docked Multi-Channel Digital Oscilloscope */}
           <Oscilloscope

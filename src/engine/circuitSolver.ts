@@ -153,7 +153,12 @@ export function buildNodeTopology(components: CircuitComponent[], wires: Wire[])
   if (!hasGround && components.length > 0) {
     let fallbackPin: string | null = null;
     for (const comp of components) {
-      if (comp.type === 'dc_source' || comp.type === 'ac_source' || comp.type === 'clock_source') {
+      if (
+        comp.type === 'dc_source' ||
+        comp.type === 'ac_source' ||
+        comp.type === 'square_wave' ||
+        comp.type === 'pulse_gen'
+      ) {
         const negPin = comp.pins.find(p => p.name === '-' || p.name === 'GND');
         if (negPin) {
           fallbackPin = negPin.id;
@@ -207,12 +212,14 @@ export class CircuitSimulator {
   private prevCapacitorVoltages = new Map<string, number>();
   private prevInductorCurrents = new Map<string, number>();
   private prevDiodeVoltages = new Map<string, number>();
+  private relayStates = new Map<string, boolean>();
   private prevNodeVoltages: number[] = [];
 
   public reset() {
     this.prevCapacitorVoltages.clear();
     this.prevInductorCurrents.clear();
     this.prevDiodeVoltages.clear();
+    this.relayStates.clear();
     this.prevNodeVoltages = [];
   }
 
@@ -228,10 +235,15 @@ export class CircuitSimulator {
     dt: number
   ): SimulationResult {
     const topology = buildNodeTopology(components, wires);
-    const numNodes = topology.nodeCount; // node 0 is ground, nodes 1..numNodes-1 are unknowns
+    const transformers = components.filter(c => c.type === 'transformer');
+    const transformerCoreNodes = new Map<string, number>();
+    transformers.forEach((tr, idx) => {
+      transformerCoreNodes.set(tr.id, topology.nodeCount + idx);
+    });
+    const numNodes = topology.nodeCount + transformers.length; // node 0 is ground, nodes 1..numNodes-1 are unknowns
 
     // Branch equations for components enforcing voltage:
-    // DC sources, AC sources, Clock sources, Ammeters, OpAmp outputs
+    // DC sources, AC sources, Square Wave, Pulse Wave, Clock sources, Ammeters, OpAmp outputs, Transformers
     interface VoltageBranch {
       compId: string;
       nodePlus: number;
@@ -244,6 +256,8 @@ export class CircuitSimulator {
     let nodeVoltages = (this.prevNodeVoltages && this.prevNodeVoltages.length === numNodes)
       ? [...this.prevNodeVoltages]
       : new Array(numNodes).fill(0);
+    let lastSolution: number[] | null = null;
+    let lastVoltageBranches: VoltageBranch[] = [];
     const MAX_ITERS = 25;
 
     for (let iter = 0; iter < MAX_ITERS; iter++) {
@@ -290,16 +304,35 @@ export class CircuitSimulator {
               voltage: vInstant,
             });
           }
-        } else if (comp.type === 'clock_source') {
+        } else if (comp.type === 'square_wave') {
+          const pPin = comp.pins.find(p => p.name === '+');
+          const nPin = comp.pins.find(p => p.name === '-');
+          if (pPin && nPin) {
+            const vAmp = comp.params.voltage ?? 5;
+            const dcOffset = comp.params.dcOffset ?? 0;
+            const freq = comp.params.frequency ?? 50;
+            const phaseCycles = (comp.params.phase ?? 0) / 360;
+            const cyclePos = (((time * freq + phaseCycles) % 1) + 1) % 1;
+            const vInstant = (cyclePos < 0.5 ? vAmp : -vAmp) + dcOffset;
+
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: topology.pinToNode.get(pPin.id) ?? 0,
+              nodeMinus: topology.pinToNode.get(nPin.id) ?? 0,
+              voltage: vInstant,
+            });
+          }
+        } else if (comp.type === 'pulse_gen') {
           const outPin = comp.pins.find(p => p.name === 'OUT');
           const gndPin = comp.pins.find(p => p.name === 'GND');
           if (outPin && gndPin) {
             const vHigh = comp.params.voltage ?? 5;
-            const freq = comp.params.frequency ?? 10;
-            const duty = comp.params.dutyCycle ?? 0.5;
-            const period = 1 / Math.max(freq, 0.001);
-            const tInPeriod = (time % period) / period;
-            const vInstant = tInPeriod < duty ? vHigh : 0;
+            const vLow = comp.params.lowVoltage ?? 0;
+            const freq = Math.max(comp.params.frequency ?? 50, 0.001);
+            const duty = Math.min(Math.max(comp.params.dutyCycle ?? 0.5, 0.01), 0.99);
+            const period = 1 / freq;
+            const tInPeriod = (((time % period) / period) + 1) % 1;
+            const vInstant = tInPeriod < duty ? vHigh : vLow;
 
             voltageBranches.push({
               compId: comp.id,
@@ -407,9 +440,9 @@ export class CircuitSimulator {
       }
 
       // Matrix dimension: unknowns are (numNodes - 1) node voltages (since node 0 is fixed at 0)
-      // plus M voltage branch currents
+      // plus M voltage branch currents + T transformer secondary coupling branches
       const numNodeUnknowns = Math.max(numNodes - 1, 0);
-      const numBranchUnknowns = voltageBranches.length;
+      const numBranchUnknowns = voltageBranches.length + transformers.length;
       const matrixSize = numNodeUnknowns + numBranchUnknowns;
 
       if (matrixSize === 0) break;
@@ -509,6 +542,48 @@ export class CircuitSimulator {
           const iPrev = this.prevInductorCurrents.get(comp.id) ?? 0;
           stampConductance(n1, n2, Geq);
           stampCurrentSource(n1, n2, iPrev);
+        } else if (comp.type === 'relay') {
+          const coilP = comp.pins.find(p => p.name === 'COIL+') ?? comp.pins[0];
+          const coilM = comp.pins.find(p => p.name === 'COIL-') ?? comp.pins[1];
+          const ncPin = comp.pins.find(p => p.name === 'NC');
+          const comPin = comp.pins.find(p => p.name === 'COM');
+          const noPin = comp.pins.find(p => p.name === 'NO');
+          if (coilP && coilM) {
+            const nCp = topology.pinToNode.get(coilP.id) ?? 0;
+            const nCm = topology.pinToNode.get(coilM.id) ?? 0;
+            const rCoil = Math.max(comp.params.coilResistance ?? 100, 1);
+            stampConductance(nCp, nCm, 1 / rCoil);
+          }
+          if (comPin && noPin && ncPin) {
+            const nCom = topology.pinToNode.get(comPin.id) ?? 0;
+            const nNo = topology.pinToNode.get(noPin.id) ?? 0;
+            const nNc = topology.pinToNode.get(ncPin.id) ?? 0;
+            const isEnergized = this.relayStates.get(comp.id) ?? comp.params.energized ?? false;
+            stampConductance(nCom, nNo, isEnergized ? 1 / 0.01 : 1e-8);
+            stampConductance(nCom, nNc, isEnergized ? 1e-8 : 1 / 0.01);
+          }
+        } else if (comp.type === 'transformer') {
+          const p1 = comp.pins.find(p => p.name === 'P1') ?? comp.pins[0];
+          const p2 = comp.pins.find(p => p.name === 'P2') ?? comp.pins[1];
+          const s1 = comp.pins.find(p => p.name === 'S1') ?? comp.pins[2];
+          const s2 = comp.pins.find(p => p.name === 'S2') ?? comp.pins[3];
+          const nCore = transformerCoreNodes.get(comp.id) ?? 0;
+          if (p1 && p2 && s1 && s2 && nCore > 0) {
+            const nP1 = topology.pinToNode.get(p1.id) ?? 0;
+            const nP2 = topology.pinToNode.get(p2.id) ?? 0;
+            const nS2 = topology.pinToNode.get(s2.id) ?? 0;
+            const rp = Math.max(comp.params.windingResistance ?? 0.5, 0.05);
+            const lm = Math.max(comp.params.inductance ?? 1.0, 0.01);
+            const iMagPrev = this.prevInductorCurrents.get(`${comp.id}_mag`) ?? 0;
+
+            // Primary series resistance Rp + magnetizing inductor Lm
+            stampConductance(nP1, nCore, 1 / rp);
+            stampConductance(nCore, nP2, dt / lm);
+            stampCurrentSource(nCore, nP2, iMagPrev);
+            // Tiny galvanic tie so isolated secondary windings never produce a singular matrix
+            stampConductance(nS2, 0, 1e-9);
+            stampConductance(nP2, 0, 1e-9);
+          }
         } else if (comp.type === 'diode' || comp.type === 'led' || comp.type === 'zener_diode') {
           const anodePin = comp.pins.find(p => p.name === 'Anode');
           const cathodePin = comp.pins.find(p => p.name === 'Cathode');
@@ -732,11 +807,47 @@ export class CircuitSimulator {
         b[branchRow] = branch.voltage;
       }
 
+      // Stamp Transformer ideal magnetic coupling rows: (Vs1 - Vs2) - n*(Vcore - Vp2) - Rs*Isec = 0
+      for (let tIdx = 0; tIdx < transformers.length; tIdx++) {
+        const tr = transformers[tIdx];
+        const p2 = tr.pins.find(p => p.name === 'P2') ?? tr.pins[1];
+        const s1 = tr.pins.find(p => p.name === 'S1') ?? tr.pins[2];
+        const s2 = tr.pins.find(p => p.name === 'S2') ?? tr.pins[3];
+        const nCore = transformerCoreNodes.get(tr.id) ?? 0;
+        const nP2 = p2 ? (topology.pinToNode.get(p2.id) ?? 0) : 0;
+        const nS1 = s1 ? (topology.pinToNode.get(s1.id) ?? 0) : 0;
+        const nS2 = s2 ? (topology.pinToNode.get(s2.id) ?? 0) : 0;
+        const turnsRatio = Math.max(tr.params.turnsRatio ?? 1.0, 0.01);
+        const rs = Math.max((tr.params.windingResistance ?? 0.5) * 0.4, 0.05);
+        const branchRow = numNodeUnknowns + voltageBranches.length + tIdx;
+
+        if (nS1 > 0) {
+          A[branchRow][nS1 - 1] += 1;
+          A[nS1 - 1][branchRow] += 1;
+        }
+        if (nS2 > 0) {
+          A[branchRow][nS2 - 1] -= 1;
+          A[nS2 - 1][branchRow] -= 1;
+        }
+        if (nCore > 0) {
+          A[branchRow][nCore - 1] -= turnsRatio;
+          A[nCore - 1][branchRow] -= turnsRatio;
+        }
+        if (nP2 > 0) {
+          A[branchRow][nP2 - 1] += turnsRatio;
+          A[nP2 - 1][branchRow] += turnsRatio;
+        }
+        A[branchRow][branchRow] -= rs;
+        b[branchRow] = 0;
+      }
+
       // Solve linear system
       const solution = solveLinearSystem(A, b);
+      lastVoltageBranches = voltageBranches;
       if (solution) {
+        lastSolution = solution;
         const nextVoltages = [0];
-        for (let i = 0; i < numNodeUnknowns; i++) {
+        for (let i = 0; i < numNodes - 1; i++) {
           nextVoltages.push(solution[i]);
         }
 
@@ -844,8 +955,9 @@ export class CircuitSimulator {
             const normI = Math.max(0, current / maxI);
             const instantBrightness = Math.min(normI, 1.4);
             const prevBright = comp.state?.brightness ?? 0;
-            // Visual persistence (human eye / phosphor persistence so 100Hz ripple doesn't strobe-flicker)
-            const brightness = Math.max(instantBrightness, prevBright * 0.92);
+            // Time-constant persistence (25ms tau) so AC ripple stays smoothly lit regardless of dt
+            const decay = Math.exp(-dt / 0.025);
+            const brightness = Math.max(instantBrightness, prevBright * decay);
             const isBlown = current > 0.35; // Extreme 350mA destruction threshold
             comp.state = {
               voltageDrop: vd,
@@ -951,12 +1063,93 @@ export class CircuitSimulator {
               vds: -vsd,
             };
           }
-        } else if (comp.type === 'dc_source' || comp.type === 'ac_source' || comp.type === 'clock_source') {
-          current = 0;
+        } else if (comp.type === 'relay') {
+          const coilP = comp.pins.find(p => p.name === 'COIL+') ?? comp.pins[0];
+          const coilM = comp.pins.find(p => p.name === 'COIL-') ?? comp.pins[1];
+          const vCp = pinVoltages.get(coilP.id) ?? 0;
+          const vCm = pinVoltages.get(coilM.id) ?? 0;
+          const vCoil = vCp - vCm;
+          const rCoil = Math.max(comp.params.coilResistance ?? 100, 1);
+          const iCoil = vCoil / rCoil;
+          const prevEnergized = this.relayStates.get(comp.id) ?? comp.params.energized ?? false;
+          const pickup = Math.max(comp.params.pickupVoltage ?? 3.5, 0.1);
+          const dropout = pickup * 0.6;
+          const nextEnergized = prevEnergized
+            ? Math.abs(vCoil) >= dropout
+            : Math.abs(vCoil) >= pickup;
+
+          this.relayStates.set(comp.id, nextEnergized);
+          comp.params.energized = nextEnergized;
+          vDrop = vCoil;
+          current = iCoil;
+          comp.state = {
+            voltageDrop: vCoil,
+            current: iCoil,
+            power: Math.abs(vCoil * iCoil),
+            energized: nextEnergized,
+          };
+        } else if (comp.type === 'transformer') {
+          const p1 = comp.pins.find(p => p.name === 'P1') ?? comp.pins[0];
+          const p2 = comp.pins.find(p => p.name === 'P2') ?? comp.pins[1];
+          const s1 = comp.pins.find(p => p.name === 'S1') ?? comp.pins[2];
+          const s2 = comp.pins.find(p => p.name === 'S2') ?? comp.pins[3];
+          const nCore = transformerCoreNodes.get(comp.id) ?? 0;
+          const vP1 = pinVoltages.get(p1.id) ?? 0;
+          const vP2 = pinVoltages.get(p2.id) ?? 0;
+          const vS1 = pinVoltages.get(s1.id) ?? 0;
+          const vS2 = pinVoltages.get(s2.id) ?? 0;
+          const vCore = nodeVoltages[nCore] ?? vP1;
+
+          const rp = Math.max(comp.params.windingResistance ?? 0.5, 0.05);
+          const lm = Math.max(comp.params.inductance ?? 1.0, 0.01);
+          const iMagPrev = this.prevInductorCurrents.get(`${comp.id}_mag`) ?? 0;
+          const iMagNext = iMagPrev + (dt / lm) * (vCore - vP2);
+          this.prevInductorCurrents.set(`${comp.id}_mag`, iMagNext);
+
+          const iPrimary = (vP1 - vCore) / rp;
+          const tIdx = transformers.findIndex(t => t.id === comp.id);
+          const numNodeUnknowns = Math.max(numNodes - 1, 0);
+          const iBranch =
+            lastSolution && tIdx >= 0
+              ? lastSolution[numNodeUnknowns + lastVoltageBranches.length + tIdx] ?? 0
+              : 0;
+          const iSecondary = -iBranch;
+
+          vDrop = vP1 - vP2;
+          current = iPrimary;
+          comp.state = {
+            voltageDrop: vDrop,
+            current: iPrimary,
+            power: Math.abs((vS1 - vS2) * iSecondary),
+            secondaryVoltage: vS1 - vS2,
+            secondaryCurrent: iSecondary,
+          };
+        } else if (
+          comp.type === 'dc_source' ||
+          comp.type === 'ac_source' ||
+          comp.type === 'square_wave' ||
+          comp.type === 'pulse_gen' ||
+          comp.type === 'ammeter'
+        ) {
+          const bIdx = lastVoltageBranches.findIndex(b => b.compId === comp.id);
+          const numNodeUnknowns = Math.max(numNodes - 1, 0);
+          if (lastSolution && bIdx >= 0) {
+            current = -(lastSolution[numNodeUnknowns + bIdx] ?? 0);
+          } else {
+            current = 0;
+          }
         }
 
         componentCurrents.set(comp.id, current);
-        if (comp.type !== 'led' && comp.type !== 'npn' && comp.type !== 'pnp' && comp.type !== 'n_mosfet' && comp.type !== 'p_mosfet') {
+        if (
+          comp.type !== 'led' &&
+          comp.type !== 'npn' &&
+          comp.type !== 'pnp' &&
+          comp.type !== 'n_mosfet' &&
+          comp.type !== 'p_mosfet' &&
+          comp.type !== 'relay' &&
+          comp.type !== 'transformer'
+        ) {
           comp.state = {
             voltageDrop: vDrop,
             current,
