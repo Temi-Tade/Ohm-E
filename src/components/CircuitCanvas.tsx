@@ -4,6 +4,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { Sliders, Sun, Thermometer, Mic } from 'lucide-react';
 import {
   CircuitComponent,
   Wire,
@@ -420,6 +421,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
 
       {/* Main SVG Schematic Layer */}
       <svg
+        id="ohm-e-schematic-svg"
         className="absolute inset-0 w-full h-full overflow-visible"
         style={{
           transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
@@ -710,9 +712,9 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                 {/* Invisible Solid Hit Plate: Guarantees 100% reliable tap, click, and drag selection across entire component */}
                 <rect
                   x="-46"
-                  y="-46"
+                  y={comp.pins.length > 4 ? -52 : -46}
                   width="92"
-                  height="92"
+                  height={comp.pins.length > 4 ? 104 : 92}
                   rx="10"
                   fill="#000000"
                   fillOpacity="0.0001"
@@ -723,10 +725,11 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
                 {/* Selection Highlight Bounding Box with soft cyan glow */}
                 {isSelected && (
                   <rect
+                    data-selection-box="true"
                     x="-48"
-                    y="-48"
+                    y={comp.pins.length > 4 ? -54 : -48}
                     width="96"
-                    height="96"
+                    height={comp.pins.length > 4 ? 108 : 96}
                     rx="10"
                     fill="rgba(56, 189, 248, 0.08)"
                     stroke="#38bdf8"
@@ -929,7 +932,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               <>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
-                    <span>🎛️</span> Wiper
+                    <Sliders className="w-3.5 h-3.5 text-amber-400" /> Wiper
                   </span>
                   <span className="font-mono text-amber-400 font-bold">
                     {Math.round((selectedComp.params.wiper ?? 0.5) * 100)}%
@@ -956,7 +959,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               <>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
-                    <span>☀️</span> Light Level
+                    <Sun className="w-3.5 h-3.5 text-amber-400" /> Light Level
                   </span>
                   <span className="font-mono text-amber-400 font-bold">
                     {selectedComp.params.lux ?? 250} Lux
@@ -983,7 +986,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               <>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
-                    <span>🌡️</span> Thermistor Temp
+                    <Thermometer className="w-3.5 h-3.5 text-rose-400" /> Thermistor Temp
                   </span>
                   <span className="font-mono text-rose-400 font-bold">
                     {selectedComp.params.temperature ?? 25} °C
@@ -1010,7 +1013,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               <>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
-                    <span>🌡️</span> LM35 Temp
+                    <Thermometer className="w-3.5 h-3.5 text-rose-400" /> LM35 Temp
                   </span>
                   <span className="font-mono text-rose-400 font-bold">
                     {selectedComp.params.temperature ?? 25} °C
@@ -1037,7 +1040,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               <>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
-                    <span>🎙️</span> Sound Level
+                    <Mic className="w-3.5 h-3.5 text-cyan-400" /> Sound Level
                   </span>
                   <span className="font-mono text-cyan-400 font-bold">
                     {selectedComp.params.soundLevel ?? 40} dB
@@ -1151,75 +1154,109 @@ function useMemoPinPositions(components: CircuitComponent[]) {
   }, [components]);
 }
 
-// Check whether a component should be considered an obstacle between two wire endpoints
-function isCompObstacle(
-  comp: CircuitComponent,
-  from: { x: number; y: number },
-  to: { x: number; y: number }
-): boolean {
-  if (comp.type === 'junction') return false;
+// Compute world-space bounding box of a component's visual body (excluding outer terminal pins)
+function getComponentBodyBounds(comp: CircuitComponent): {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+} | null {
+  if (comp.type === 'junction') return null;
 
-  // If from or to is one of this component's pins, this is the component being connected
-  for (const pin of comp.pins) {
-    const pinPos = getPinAbsolutePos(comp, pin);
-    if (
-      Math.hypot(pinPos.x - from.x, pinPos.y - from.y) < 6 ||
-      Math.hypot(pinPos.x - to.x, pinPos.y - to.y) < 6
-    ) {
-      return false;
-    }
+  if (comp.type === 'ground') {
+    const p1 = getPinAbsolutePos(comp, { id: '', name: '', x: -16, y: -4 });
+    const p2 = getPinAbsolutePos(comp, { id: '', name: '', x: 16, y: 18 });
+    return {
+      minX: Math.min(p1.x, p2.x),
+      maxX: Math.max(p1.x, p2.x),
+      minY: Math.min(p1.y, p2.y),
+      maxY: Math.max(p1.y, p2.y),
+    };
   }
 
-  // Also skip if component center is too close to either endpoint (connected component)
+  if (comp.type === 'dac' || comp.type === 'adc') {
+    const p1 = getPinAbsolutePos(comp, { id: '', name: '', x: -28, y: -48 });
+    const p2 = getPinAbsolutePos(comp, { id: '', name: '', x: 28, y: 32 });
+    return {
+      minX: Math.min(p1.x, p2.x),
+      maxX: Math.max(p1.x, p2.x),
+      minY: Math.min(p1.y, p2.y),
+      maxY: Math.max(p1.y, p2.y),
+    };
+  }
+
+  let localHalfW = 22;
+  let localHalfH = 20;
+
   if (
-    Math.hypot(comp.x - from.x, comp.y - from.y) < 32 ||
-    Math.hypot(comp.x - to.x, comp.y - to.y) < 32
+    comp.type === 'timer_555' ||
+    comp.type === 'seven_segment' ||
+    comp.type === 'relay'
   ) {
-    return false;
+    localHalfW = 28;
+    localHalfH = 44;
+  } else if (comp.type === 'transformer') {
+    localHalfW = 26;
+    localHalfH = 30;
+  } else if (
+    comp.type === 'npn' ||
+    comp.type === 'pnp' ||
+    comp.type === 'n_mosfet' ||
+    comp.type === 'p_mosfet'
+  ) {
+    localHalfW = 18;
+    localHalfH = 20;
+  } else if (
+    comp.type === 'opamp' ||
+    comp.type === 'pir_sensor' ||
+    comp.type === 'temp_sensor' ||
+    comp.type === 'sound_sensor' ||
+    comp.type.startsWith('gate_')
+  ) {
+    localHalfW = 22;
+    localHalfH = 24;
   }
 
-  return true;
+  const rot = (((comp.rotation || 0) % 360) + 360) % 360;
+  const isVertical = rot === 90 || rot === 270;
+  const halfW = isVertical ? localHalfH : localHalfW;
+  const halfH = isVertical ? localHalfW : localHalfH;
+
+  return {
+    minX: comp.x - halfW,
+    maxX: comp.x + halfW,
+    minY: comp.y - halfH,
+    maxY: comp.y + halfH,
+  };
 }
 
-// Check whether a straight segment between p1 and p2 intersects any obstacle component
+// Check whether a straight orthogonal segment between p1 and p2 crosses any component body
 function isSegmentBlocked(
   p1: { x: number; y: number },
   p2: { x: number; y: number },
-  components: CircuitComponent[],
-  from: { x: number; y: number },
-  to: { x: number; y: number }
+  components: CircuitComponent[]
 ): boolean {
   const isHorizontal = Math.abs(p1.y - p2.y) <= 4;
   const isVertical = Math.abs(p1.x - p2.x) <= 4;
+  if (!isHorizontal && !isVertical) return false;
+
+  const segMinX = Math.min(p1.x, p2.x);
+  const segMaxX = Math.max(p1.x, p2.x);
+  const segMinY = Math.min(p1.y, p2.y);
+  const segMaxY = Math.max(p1.y, p2.y);
 
   for (const comp of components) {
-    if (!isCompObstacle(comp, from, to)) continue;
-
-    const halfW = comp.rotation % 180 !== 0 ? 24 : 28;
-    const halfH = comp.rotation % 180 !== 0 ? 28 : 24;
+    const box = getComponentBodyBounds(comp);
+    if (!box) continue;
 
     if (isHorizontal) {
       const y = (p1.y + p2.y) / 2;
-      const minX = Math.min(p1.x, p2.x);
-      const maxX = Math.max(p1.x, p2.x);
-
-      if (
-        Math.abs(comp.y - y) < halfH + 4 &&
-        maxX > comp.x - halfW + 6 &&
-        minX < comp.x + halfW - 6
-      ) {
+      if (y > box.minY - 2 && y < box.maxY + 2 && segMaxX > box.minX + 2 && segMinX < box.maxX - 2) {
         return true;
       }
-    } else if (isVertical) {
+    } else {
       const x = (p1.x + p2.x) / 2;
-      const minY = Math.min(p1.y, p2.y);
-      const maxY = Math.max(p1.y, p2.y);
-
-      if (
-        Math.abs(comp.x - x) < halfW + 4 &&
-        maxY > comp.y - halfH + 6 &&
-        minY < comp.y + halfH - 6
-      ) {
+      if (x > box.minX - 2 && x < box.maxX + 2 && segMaxY > box.minY + 2 && segMinY < box.maxY - 2) {
         return true;
       }
     }
@@ -1227,7 +1264,16 @@ function isSegmentBlocked(
   return false;
 }
 
-// Generate clean, direct orthogonal Manhattan path (straight whenever possible, 1-bend L-shape if unaligned, bypassing obstacles only when necessary)
+function isPathClear(points: { x: number; y: number }[], components: CircuitComponent[]): boolean {
+  for (let i = 0; i < points.length - 1; i++) {
+    if (isSegmentBlocked(points[i], points[i + 1], components)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Generate clean, direct orthogonal Manhattan path that routes around all component bodies
 function getOrthogonalRoute(
   from: { x: number; y: number },
   to: { x: number; y: number },
@@ -1239,78 +1285,76 @@ function getOrthogonalRoute(
   // Case 1: Horizontally aligned terminals (same horizontal line)
   if (Math.abs(dy) <= 4) {
     const alignedTo = { x: to.x, y: from.y };
-    const blocked = isSegmentBlocked(from, alignedTo, components, from, to);
-    if (!blocked) {
-      return [from, alignedTo];
+    const direct = [from, alignedTo];
+    if (isPathClear(direct, components)) {
+      return direct;
     }
-    // Blocked by an obstacle component directly in the middle: route around it
-    const yAbove = from.y - 45;
-    const yBelow = from.y + 45;
-    const blockedAbove = isSegmentBlocked(
-      { x: from.x, y: yAbove },
-      { x: to.x, y: yAbove },
-      components,
-      from,
-      to
-    );
-    const bypassY = blockedAbove ? yBelow : yAbove;
-    return [
-      from,
-      { x: from.x, y: bypassY },
-      { x: to.x, y: bypassY },
-      alignedTo,
-    ];
+    for (const offset of [40, -40, 60, -60, 80, -80, 100, -100]) {
+      const by = from.y + offset;
+      const candidate = [from, { x: from.x, y: by }, { x: to.x, y: by }, alignedTo];
+      if (isPathClear(candidate, components)) {
+        return candidate;
+      }
+    }
+    return [from, { x: from.x, y: from.y - 60 }, { x: to.x, y: from.y - 60 }, alignedTo];
   }
 
   // Case 2: Vertically aligned terminals (same vertical line)
   if (Math.abs(dx) <= 4) {
     const alignedTo = { x: from.x, y: to.y };
-    const blocked = isSegmentBlocked(from, alignedTo, components, from, to);
-    if (!blocked) {
-      return [from, alignedTo];
+    const direct = [from, alignedTo];
+    if (isPathClear(direct, components)) {
+      return direct;
     }
-    // Blocked by an obstacle component directly in the middle: route around it
-    const xLeft = from.x - 45;
-    const xRight = from.x + 45;
-    const blockedLeft = isSegmentBlocked(
-      { x: xLeft, y: from.y },
-      { x: xLeft, y: to.y },
-      components,
-      from,
-      to
-    );
-    const bypassX = blockedLeft ? xRight : xLeft;
-    return [
-      from,
-      { x: bypassX, y: from.y },
-      { x: bypassX, y: to.y },
-      alignedTo,
-    ];
+    for (const offset of [-40, 40, -60, 60, -80, 80, -100, 100]) {
+      const bx = from.x + offset;
+      const candidate = [from, { x: bx, y: from.y }, { x: bx, y: to.y }, alignedTo];
+      if (isPathClear(candidate, components)) {
+        return candidate;
+      }
+    }
+    return [from, { x: from.x - 60, y: from.y }, { x: from.x - 60, y: to.y }, alignedTo];
   }
 
-  // Case 3: Unaligned terminals: use a clean single 90-degree L-route
-  // Option 1: Horizontal then Vertical (corner at { x: to.x, y: from.y })
-  const corner1 = { x: to.x, y: from.y };
-  const blockedH1 = isSegmentBlocked(from, corner1, components, from, to);
-  const blockedV1 = isSegmentBlocked(corner1, to, components, from, to);
-  const opt1Clear = !blockedH1 && !blockedV1;
-
-  // Option 2: Vertical then Horizontal (corner at { x: from.x, y: to.y })
-  const corner2 = { x: from.x, y: to.y };
-  const blockedV2 = isSegmentBlocked(from, corner2, components, from, to);
-  const blockedH2 = isSegmentBlocked(corner2, to, components, from, to);
-  const opt2Clear = !blockedV2 && !blockedH2;
-
-  if (opt1Clear) {
-    return [from, corner1, to];
-  }
-  if (opt2Clear) {
-    return [from, corner2, to];
+  // Case 3: Unaligned terminals: prefer a clean 1-bend L-route that does not cross any component body
+  const opt1 = [from, { x: to.x, y: from.y }, to];
+  if (isPathClear(opt1, components)) {
+    return opt1;
   }
 
-  // If both direct L-routes have an obstacle, use a stepped bypass
-  const midX = from.x + dx / 2;
-  return [from, { x: midX, y: from.y }, { x: midX, y: to.y }, to];
+  const opt2 = [from, { x: from.x, y: to.y }, to];
+  if (isPathClear(opt2, components)) {
+    return opt2;
+  }
+
+  // Both direct L-routes cross a body: search clean stepped Z-routes / U-detours
+  const midX = Math.round((from.x + dx / 2) / 10) * 10;
+  const midY = Math.round((from.y + dy / 2) / 10) * 10;
+  const candidates: { x: number; y: number }[][] = [
+    [from, { x: midX, y: from.y }, { x: midX, y: to.y }, to],
+    [from, { x: from.x, y: midY }, { x: to.x, y: midY }, to],
+  ];
+
+  for (const offset of [-40, 40, -60, 60, -80, 80, -100, 100]) {
+    candidates.push([from, { x: from.x + offset, y: from.y }, { x: from.x + offset, y: to.y }, to]);
+    candidates.push([from, { x: from.x, y: from.y + offset }, { x: to.x, y: from.y + offset }, to]);
+    candidates.push([from, { x: to.x + offset, y: from.y }, { x: to.x + offset, y: to.y }, to]);
+    candidates.push([from, { x: from.x, y: to.y + offset }, { x: to.x, y: to.y + offset }, to]);
+  }
+
+  let bestCandidate: { x: number; y: number }[] | null = null;
+  let bestLen = Infinity;
+  for (const cand of candidates) {
+    if (isPathClear(cand, components)) {
+      const len = getPathLength(cand);
+      if (len < bestLen) {
+        bestLen = len;
+        bestCandidate = cand;
+      }
+    }
+  }
+
+  return bestCandidate ?? opt2;
 }
 
 // Compute collinear midpoint strictly on the wire path so splitting at midpoint keeps both segments 100% straight

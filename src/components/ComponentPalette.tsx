@@ -48,21 +48,36 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'diode', label: 'PN Junction Diode', category: 'semiconductors', hint: 'One-way current rectifier' },
   { type: 'zener_diode', label: 'Zener Diode', category: 'semiconductors', hint: 'Reverse breakdown regulator' },
   { type: 'led', label: 'Light Emitting Diode', category: 'semiconductors', hint: 'Luminescent indicator' },
+  { type: 'incandescent_bulb', label: 'Incandescent Light Bulb', category: 'semiconductors', hint: 'Thermal filament lamp' },
   { type: 'npn', label: 'NPN BJT Transistor', category: 'semiconductors', hint: 'Bipolar current amplifier' },
   { type: 'pnp', label: 'PNP BJT Transistor', category: 'semiconductors', hint: 'Complementary bipolar transistor' },
   { type: 'n_mosfet', label: 'N-Channel MOSFET', category: 'semiconductors', hint: 'Voltage-controlled N-FET' },
   { type: 'p_mosfet', label: 'P-Channel MOSFET', category: 'semiconductors', hint: 'Voltage-controlled P-FET' },
 
-  // Controls & Active
+  // Controls, ICs & Logic
   { type: 'opamp', label: 'Operational Amplifier', category: 'controls', hint: 'High-gain differential op-amp' },
+  { type: 'timer_555', label: '555 Timer IC', category: 'controls', hint: 'Precision astable / monostable timer' },
+  { type: 'adc', label: '4-Bit ADC', category: 'controls', hint: 'Analog-to-digital converter (D0-D3)' },
+  { type: 'dac', label: '4-Bit DAC', category: 'controls', hint: 'Digital-to-analog converter (Vout)' },
+  { type: 'seven_segment', label: '7-Segment Display', category: 'controls', hint: 'Numeric LED display (a-g, dp)' },
+  { type: 'gate_and', label: 'AND Gate', category: 'controls', hint: '2-input digital AND logic' },
+  { type: 'gate_or', label: 'OR Gate', category: 'controls', hint: '2-input digital OR logic' },
+  { type: 'gate_not', label: 'NOT Gate (Inverter)', category: 'controls', hint: 'Single-input logic inverter' },
+  { type: 'gate_nand', label: 'NAND Gate', category: 'controls', hint: '2-input inverted AND logic' },
+  { type: 'gate_nor', label: 'NOR Gate', category: 'controls', hint: '2-input inverted OR logic' },
+  { type: 'gate_xor', label: 'XOR Gate', category: 'controls', hint: '2-input exclusive OR logic' },
+  { type: 'gate_xnor', label: 'XNOR Gate', category: 'controls', hint: '2-input exclusive NOR logic' },
   { type: 'switch', label: 'SPST Switch', category: 'controls', hint: 'Single-pole single-throw' },
   { type: 'push_button', label: 'Push Button', category: 'controls', hint: 'Normally-open momentary switch' },
   { type: 'relay', label: 'SPDT Relay', category: 'controls', hint: 'Electromagnetic coil switch (NC/NO)' },
+  { type: 'dc_motor', label: 'DC Motor', category: 'controls', hint: 'Permanent-magnet DC actuator (RPM)' },
+  { type: 'ac_motor', label: 'AC Motor', category: 'controls', hint: 'Alternating-current induction motor' },
   { type: 'buzzer', label: 'Piezo Buzzer', category: 'controls', hint: 'Acoustic audio transducer' },
 
   // Meters
   { type: 'voltmeter', label: 'Voltmeter', category: 'meters', hint: 'High-Z voltage probe' },
   { type: 'ammeter', label: 'Ammeter', category: 'meters', hint: 'Low-Z series current probe' },
+  { type: 'ohmmeter', label: 'Ohmmeter', category: 'meters', hint: 'Direct resistance probe (Ω)' },
 ];
 
 export const ComponentPalette: React.FC<ComponentPaletteProps> = ({

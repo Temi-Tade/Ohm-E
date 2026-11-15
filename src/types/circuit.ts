@@ -17,17 +17,32 @@ export type ComponentType =
   | 'diode'
   | 'zener_diode'
   | 'led'
+  | 'incandescent_bulb'
   | 'npn'
   | 'pnp'
   | 'n_mosfet'
   | 'p_mosfet'
   | 'opamp'
+  | 'timer_555'
+  | 'adc'
+  | 'dac'
+  | 'seven_segment'
+  | 'gate_and'
+  | 'gate_or'
+  | 'gate_not'
+  | 'gate_nand'
+  | 'gate_nor'
+  | 'gate_xor'
+  | 'gate_xnor'
   | 'switch'
   | 'push_button'
   | 'relay'
+  | 'dc_motor'
+  | 'ac_motor'
   | 'buzzer'
   | 'voltmeter'
   | 'ammeter'
+  | 'ohmmeter'
   | 'photoresistor'
   | 'thermistor'
   | 'pir_sensor'
@@ -60,7 +75,7 @@ export interface CircuitComponent {
     voltageDrop?: number;
     current?: number;
     power?: number;
-    brightness?: number; // for LED: 0 to 1
+    brightness?: number; // for LED & bulb: 0 to 1
     isBlown?: boolean;
     audioFrequency?: number;
     vgs?: number;
@@ -68,6 +83,11 @@ export interface CircuitComponent {
     energized?: boolean; // for Relay
     secondaryVoltage?: number; // for Transformer
     secondaryCurrent?: number; // for Transformer
+    measuredResistance?: number; // for Ohmmeter (Infinity = OL, NaN = Live Error)
+    rpm?: number; // for DC / AC Motors
+    digitalValue?: number; // for ADC / DAC (0..15)
+    logicOutput?: boolean; // for Logic Gates / 555 Timer
+    segments?: number[]; // for 7-Segment Display [a,b,c,d,e,f,g,dp] brightness 0..1
   };
 }
 
@@ -76,18 +96,20 @@ export interface ComponentParams {
   voltage?: number; // V
   lowVoltage?: number; // Low level V for pulse generator
   dcOffset?: number; // DC offset for square wave
-  frequency?: number; // Hz for AC / Square / Pulse / Clock
+  frequency?: number; // Hz for AC / Square / Pulse
   phase?: number; // degrees
   waveform?: 'sine' | 'square' | 'triangle' | 'sawtooth';
-  dutyCycle?: number; // 0.0 - 1.0 for pulse/clock
+  dutyCycle?: number; // 0.0 - 1.0 for pulse
 
-  // Passives
+  // Passives & Loads
   resistance?: number; // Ohms
   capacitance?: number; // Farads
   inductance?: number; // Henries
   wiper?: number; // 0.0 - 1.0 for potentiometer
   turnsRatio?: number; // Ns / Np for transformer (e.g. 1.0, 0.5, 2.0)
-  windingResistance?: number; // Primary/secondary series winding R
+  windingResistance?: number; // Primary/secondary/motor winding R
+  ratedVoltage?: number; // Rated voltage for Bulb / Motors
+  ratedRpm?: number; // Rated RPM for DC / AC Motors
 
   // Semiconductors
   forwardVoltage?: number; // V for diode/LED (e.g. 0.7V, 2.0V)
@@ -96,14 +118,16 @@ export interface ComponentParams {
   maxCurrent?: number; // A (e.g. 0.04A for LED)
   beta?: number; // hFE for BJT (e.g. 100)
 
-  // MOSFETs
-  vth?: number; // Threshold voltage Vth (V, e.g. 2.0V for NMOS, -2.0V for PMOS)
+  // MOSFETs & Logic / Data Converters
+  vth?: number; // Threshold voltage Vth (V)
   transconductance?: number; // Gain parameter K in A/V^2 (e.g. 0.05)
   rdsOn?: number; // On-state saturation resistance (e.g. 0.2 ohm)
+  vref?: number; // Reference voltage for ADC / DAC
+  commonMode?: 'cathode' | 'anode'; // Common mode for 7-Segment Display
 
   // OpAmp
   gain?: number; // Open loop gain (e.g. 100000)
-  vcc?: number; // + rail (e.g. 15V)
+  vcc?: number; // + rail (e.g. 15V) or logic high V
   vee?: number; // - rail (e.g. -15V)
 
   // Controls

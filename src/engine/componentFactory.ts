@@ -602,6 +602,231 @@ export function createComponent(
         },
       };
 
+    case 'incandescent_bulb':
+      return {
+        id,
+        type,
+        name: 'Incandescent Bulb',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_1`, name: '1', x: -40, y: 0 },
+          { id: `${id}_2`, name: '2', x: 40, y: 0 },
+        ],
+        params: {
+          resistance: 25,
+          ratedVoltage: 5.0,
+          ...customParams,
+        },
+      };
+
+    case 'dc_motor':
+      return {
+        id,
+        type,
+        name: 'DC Motor',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_p`, name: '+', label: '+', x: -40, y: 0 },
+          { id: `${id}_n`, name: '-', label: '-', x: 40, y: 0 },
+        ],
+        params: {
+          windingResistance: 10,
+          ratedVoltage: 12,
+          ratedRpm: 3000,
+          ...customParams,
+        },
+      };
+
+    case 'ac_motor':
+      return {
+        id,
+        type,
+        name: 'AC Motor',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_1`, name: 'L1', label: 'L1', x: -40, y: 0 },
+          { id: `${id}_2`, name: 'L2', label: 'L2', x: 40, y: 0 },
+        ],
+        params: {
+          windingResistance: 20,
+          ratedVoltage: 12,
+          ratedRpm: 1500,
+          ...customParams,
+        },
+      };
+
+    case 'ohmmeter':
+      return {
+        id,
+        type,
+        name: 'Ohmmeter',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_p`, name: '+', label: '+', x: -40, y: 0 },
+          { id: `${id}_n`, name: '-', label: '-', x: 40, y: 0 },
+        ],
+        params: {
+          ...customParams,
+        },
+      };
+
+    case 'timer_555':
+      return {
+        id,
+        type,
+        name: '555 Timer IC',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_rst`, name: 'RESET', label: 'RST', x: -40, y: -40 },
+          { id: `${id}_trg`, name: 'TRIG', label: 'TRG', x: -40, y: -20 },
+          { id: `${id}_thr`, name: 'THRESH', label: 'THR', x: -40, y: 20 },
+          { id: `${id}_gnd`, name: 'GND', label: 'GND', x: -40, y: 40 },
+          { id: `${id}_vcc`, name: 'VCC', label: 'VCC', x: 40, y: -40 },
+          { id: `${id}_dis`, name: 'DISCH', label: 'DIS', x: 40, y: -20 },
+          { id: `${id}_out`, name: 'OUT', label: 'OUT', x: 40, y: 0 },
+          { id: `${id}_ctl`, name: 'CTRL', label: 'CTL', x: 40, y: 40 },
+        ],
+        params: {
+          ...customParams,
+        },
+      };
+
+    case 'adc':
+      return {
+        id,
+        type,
+        name: '4-Bit ADC',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_in`, name: 'IN', label: 'IN', x: -40, y: -20 },
+          { id: `${id}_gnd`, name: 'GND', label: 'GND', x: -40, y: 20 },
+          { id: `${id}_d3`, name: 'D3', label: 'D3', x: 40, y: -40 },
+          { id: `${id}_d2`, name: 'D2', label: 'D2', x: 40, y: -20 },
+          { id: `${id}_d1`, name: 'D1', label: 'D1', x: 40, y: 0 },
+          { id: `${id}_d0`, name: 'D0', label: 'D0', x: 40, y: 20 },
+        ],
+        params: {
+          vref: 5.0,
+          vcc: 5.0,
+          ...customParams,
+        },
+      };
+
+    case 'dac':
+      return {
+        id,
+        type,
+        name: '4-Bit DAC',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_d3`, name: 'D3', label: 'D3', x: -40, y: -40 },
+          { id: `${id}_d2`, name: 'D2', label: 'D2', x: -40, y: -20 },
+          { id: `${id}_d1`, name: 'D1', label: 'D1', x: -40, y: 0 },
+          { id: `${id}_d0`, name: 'D0', label: 'D0', x: -40, y: 20 },
+          { id: `${id}_gnd`, name: 'GND', label: 'GND', x: 0, y: 40 },
+          { id: `${id}_out`, name: 'OUT', label: 'OUT', x: 40, y: 0 },
+        ],
+        params: {
+          vref: 5.0,
+          vth: 2.5,
+          ...customParams,
+        },
+      };
+
+    case 'seven_segment':
+      return {
+        id,
+        type,
+        name: '7-Segment Display',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_a`, name: 'a', label: 'a', x: -40, y: -40 },
+          { id: `${id}_b`, name: 'b', label: 'b', x: -40, y: -20 },
+          { id: `${id}_c`, name: 'c', label: 'c', x: -40, y: 0 },
+          { id: `${id}_d`, name: 'd', label: 'd', x: -40, y: 20 },
+          { id: `${id}_com`, name: 'COM', label: 'COM', x: -40, y: 40 },
+          { id: `${id}_e`, name: 'e', label: 'e', x: 40, y: -40 },
+          { id: `${id}_f`, name: 'f', label: 'f', x: 40, y: -20 },
+          { id: `${id}_g`, name: 'g', label: 'g', x: 40, y: 0 },
+          { id: `${id}_dp`, name: 'dp', label: 'dp', x: 40, y: 20 },
+        ],
+        params: {
+          commonMode: 'cathode',
+          ledColor: 'red',
+          forwardVoltage: 1.8,
+          ...customParams,
+        },
+      };
+
+    case 'gate_not':
+      return {
+        id,
+        type,
+        name: 'NOT Gate',
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_a`, name: 'A', label: 'A', x: -40, y: 0 },
+          { id: `${id}_out`, name: 'OUT', label: 'Y', x: 40, y: 0 },
+        ],
+        params: {
+          vcc: 5.0,
+          vth: 2.5,
+          ...customParams,
+        },
+      };
+
+    case 'gate_and':
+    case 'gate_or':
+    case 'gate_nand':
+    case 'gate_nor':
+    case 'gate_xor':
+    case 'gate_xnor': {
+      const gateNames: Record<string, string> = {
+        gate_and: 'AND Gate',
+        gate_or: 'OR Gate',
+        gate_nand: 'NAND Gate',
+        gate_nor: 'NOR Gate',
+        gate_xor: 'XOR Gate',
+        gate_xnor: 'XNOR Gate',
+      };
+      return {
+        id,
+        type,
+        name: gateNames[type],
+        x,
+        y,
+        rotation: 0,
+        pins: [
+          { id: `${id}_a`, name: 'A', label: 'A', x: -40, y: -20 },
+          { id: `${id}_b`, name: 'B', label: 'B', x: -40, y: 20 },
+          { id: `${id}_out`, name: 'OUT', label: 'Y', x: 40, y: 0 },
+        ],
+        params: {
+          vcc: 5.0,
+          vth: 2.5,
+          ...customParams,
+        },
+      };
+    }
+
     case 'junction':
       return {
         id,

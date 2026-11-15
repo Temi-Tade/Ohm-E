@@ -96,7 +96,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
 
           {/* Solver Explanation */}
           <div className="p-3.5 rounded-lg bg-[#16202c] border border-[#24354a] text-[11px] text-[#cfe3f8] leading-relaxed space-y-1">
-            <span className="font-semibold text-[#38bdf8] block">⚡ Real-Time Physics Engine:</span>
+            <span className="font-semibold text-[#38bdf8] block">Real-Time Physics Engine:</span>
             Ohm-E runs an in-browser Modified Nodal Analysis (MNA) matrix solver with Newton-Raphson non-linear iteration and backward Euler numerical integration for capacitors and inductors at sub-millisecond precision.
           </div>
         </div>

@@ -157,7 +157,11 @@ export function buildNodeTopology(components: CircuitComponent[], wires: Wire[])
         comp.type === 'dc_source' ||
         comp.type === 'ac_source' ||
         comp.type === 'square_wave' ||
-        comp.type === 'pulse_gen'
+        comp.type === 'pulse_gen' ||
+        comp.type === 'timer_555' ||
+        comp.type === 'adc' ||
+        comp.type === 'dac' ||
+        comp.type === 'ohmmeter'
       ) {
         const negPin = comp.pins.find(p => p.name === '-' || p.name === 'GND');
         if (negPin) {
@@ -213,6 +217,11 @@ export class CircuitSimulator {
   private prevInductorCurrents = new Map<string, number>();
   private prevDiodeVoltages = new Map<string, number>();
   private relayStates = new Map<string, boolean>();
+  private timer555States = new Map<string, boolean>();
+  private motorSpeeds = new Map<string, number>();
+  private acMotorDcAvg = new Map<string, number>();
+  private acMotorRmsSq = new Map<string, number>();
+  private bulbTemperatures = new Map<string, number>();
   private prevNodeVoltages: number[] = [];
 
   public reset() {
@@ -220,6 +229,11 @@ export class CircuitSimulator {
     this.prevInductorCurrents.clear();
     this.prevDiodeVoltages.clear();
     this.relayStates.clear();
+    this.timer555States.clear();
+    this.motorSpeeds.clear();
+    this.acMotorDcAvg.clear();
+    this.acMotorRmsSq.clear();
+    this.bulbTemperatures.clear();
     this.prevNodeVoltages = [];
   }
 
@@ -434,6 +448,116 @@ export class CircuitSimulator {
               nodeMinus: nGnd,
               voltage: outV,
               resistance: 50,
+            });
+          }
+        } else if (comp.type === 'timer_555') {
+          const vccPin = comp.pins.find(p => p.name === 'VCC');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          if (vccPin && gndPin && outPin) {
+            const nVcc = topology.pinToNode.get(vccPin.id) ?? 0;
+            const nGnd = topology.pinToNode.get(gndPin.id) ?? 0;
+            const nOut = topology.pinToNode.get(outPin.id) ?? 0;
+            const vSup = (nodeVoltages[nVcc] ?? 0) - (nodeVoltages[nGnd] ?? 0);
+            const q = this.timer555States.get(comp.id) ?? false;
+            const outV = vSup >= 2.0 ? (q ? Math.max(vSup - 1.2, 0) : 0.1) : 0;
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: nOut,
+              nodeMinus: nGnd,
+              voltage: outV,
+              resistance: 15,
+            });
+          }
+        } else if (comp.type === 'adc') {
+          const inPin = comp.pins.find(p => p.name === 'IN');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          if (inPin && gndPin) {
+            const nIn = topology.pinToNode.get(inPin.id) ?? 0;
+            const nGnd = topology.pinToNode.get(gndPin.id) ?? 0;
+            const vin = (nodeVoltages[nIn] ?? 0) - (nodeVoltages[nGnd] ?? 0);
+            const vref = Math.max(comp.params.vref ?? 5.0, 0.1);
+            const vcc = comp.params.vcc ?? 5.0;
+            const ratio = Math.min(Math.max(vin / vref, 0), 1);
+            const code = Math.round(ratio * 15);
+            const bitNames = ['D0', 'D1', 'D2', 'D3'];
+            for (let bit = 0; bit < 4; bit++) {
+              const bPin = comp.pins.find(p => p.name === bitNames[bit]);
+              if (bPin) {
+                const nBit = topology.pinToNode.get(bPin.id) ?? 0;
+                const high = ((code >> bit) & 1) === 1;
+                voltageBranches.push({
+                  compId: comp.id,
+                  nodePlus: nBit,
+                  nodeMinus: nGnd,
+                  voltage: high ? vcc : 0,
+                  resistance: 25,
+                });
+              }
+            }
+          }
+        } else if (comp.type === 'dac') {
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          if (gndPin && outPin) {
+            const nGnd = topology.pinToNode.get(gndPin.id) ?? 0;
+            const nOut = topology.pinToNode.get(outPin.id) ?? 0;
+            const vGnd = nodeVoltages[nGnd] ?? 0;
+            const vth = comp.params.vth ?? 2.5;
+            const vref = comp.params.vref ?? 5.0;
+            const bitNames = ['D0', 'D1', 'D2', 'D3'];
+            let code = 0;
+            for (let bit = 0; bit < 4; bit++) {
+              const bPin = comp.pins.find(p => p.name === bitNames[bit]);
+              if (bPin) {
+                const vBit = (nodeVoltages[topology.pinToNode.get(bPin.id) ?? 0] ?? 0) - vGnd;
+                if (vBit >= vth) code |= 1 << bit;
+              }
+            }
+            const outV = (code / 15) * vref;
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: nOut,
+              nodeMinus: nGnd,
+              voltage: outV,
+              resistance: 20,
+            });
+          }
+        } else if (
+          comp.type === 'gate_and' ||
+          comp.type === 'gate_or' ||
+          comp.type === 'gate_not' ||
+          comp.type === 'gate_nand' ||
+          comp.type === 'gate_nor' ||
+          comp.type === 'gate_xor' ||
+          comp.type === 'gate_xnor'
+        ) {
+          const aPin = comp.pins.find(p => p.name === 'A');
+          const bPin = comp.pins.find(p => p.name === 'B');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          if (aPin && outPin) {
+            const vth = comp.params.vth ?? 2.5;
+            const vcc = comp.params.vcc ?? 5.0;
+            const vA = nodeVoltages[topology.pinToNode.get(aPin.id) ?? 0] ?? 0;
+            const vB = bPin ? (nodeVoltages[topology.pinToNode.get(bPin.id) ?? 0] ?? 0) : 0;
+            const a = vA >= vth;
+            const b = vB >= vth;
+            let outHigh = false;
+            switch (comp.type) {
+              case 'gate_not': outHigh = !a; break;
+              case 'gate_and': outHigh = a && b; break;
+              case 'gate_or': outHigh = a || b; break;
+              case 'gate_nand': outHigh = !(a && b); break;
+              case 'gate_nor': outHigh = !(a || b); break;
+              case 'gate_xor': outHigh = a !== b; break;
+              case 'gate_xnor': outHigh = a === b; break;
+            }
+            voltageBranches.push({
+              compId: comp.id,
+              nodePlus: topology.pinToNode.get(outPin.id) ?? 0,
+              nodeMinus: 0,
+              voltage: outHigh ? vcc : 0,
+              resistance: 25,
             });
           }
         }
@@ -779,6 +903,121 @@ export class CircuitSimulator {
               stampConductance(ns, nd, 1e-7);
             }
           }
+        } else if (comp.type === 'incandescent_bulb') {
+          const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
+          const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
+          if (comp.state?.isBlown) {
+            stampConductance(n1, n2, 1e-9);
+          } else {
+            const R = Math.max(comp.params.resistance ?? 25, 0.5);
+            stampConductance(n1, n2, 1 / R);
+          }
+        } else if (comp.type === 'dc_motor') {
+          const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
+          const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
+          const Ra = Math.max(comp.params.windingResistance ?? 10, 0.5);
+          const ratedV = Math.max(comp.params.ratedVoltage ?? 12, 0.5);
+          const ratedRpm = Math.max(comp.params.ratedRpm ?? 3000, 100);
+          const Ke = ratedV / ((ratedRpm * 2 * Math.PI) / 60);
+          const omega = this.motorSpeeds.get(comp.id) ?? 0;
+          const eb = Ke * omega;
+          stampConductance(n1, n2, 1 / Ra);
+          stampCurrentSource(n1, n2, eb / Ra);
+        } else if (comp.type === 'ac_motor') {
+          const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
+          const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
+          const Ra = Math.max(comp.params.windingResistance ?? 20, 0.5);
+          stampConductance(n1, n2, 1 / Ra);
+        } else if (comp.type === 'ohmmeter') {
+          const n1 = topology.pinToNode.get(comp.pins[0].id) ?? 0;
+          const n2 = topology.pinToNode.get(comp.pins[1].id) ?? 0;
+          // Precision 1.0V Norton test source with 1kΩ internal series resistance
+          stampConductance(n1, n2, 1 / 1000);
+          stampCurrentSource(n2, n1, 1.0 / 1000);
+        } else if (comp.type === 'timer_555') {
+          const vccPin = comp.pins.find(p => p.name === 'VCC');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const ctrlPin = comp.pins.find(p => p.name === 'CTRL');
+          const rstPin = comp.pins.find(p => p.name === 'RESET');
+          const trgPin = comp.pins.find(p => p.name === 'TRIG');
+          const thrPin = comp.pins.find(p => p.name === 'THRESH');
+          const disPin = comp.pins.find(p => p.name === 'DISCH');
+          const nVcc = vccPin ? (topology.pinToNode.get(vccPin.id) ?? 0) : 0;
+          const nGnd = gndPin ? (topology.pinToNode.get(gndPin.id) ?? 0) : 0;
+          const nCtrl = ctrlPin ? (topology.pinToNode.get(ctrlPin.id) ?? 0) : 0;
+          const nRst = rstPin ? (topology.pinToNode.get(rstPin.id) ?? 0) : 0;
+          const nTrg = trgPin ? (topology.pinToNode.get(trgPin.id) ?? 0) : 0;
+          const nThr = thrPin ? (topology.pinToNode.get(thrPin.id) ?? 0) : 0;
+          const nDis = disPin ? (topology.pinToNode.get(disPin.id) ?? 0) : 0;
+
+          // Internal 3x 5kΩ resistor divider sets CTRL at 2/3 VCC
+          stampConductance(nVcc, nCtrl, 1 / 5000);
+          stampConductance(nCtrl, nGnd, 1 / 10000);
+          // Weak pull-up on RESET so unconnected RESET defaults HIGH
+          stampConductance(nVcc, nRst, 1 / 1e6);
+          // High-Z comparator inputs
+          stampConductance(nTrg, nGnd, 1e-8);
+          stampConductance(nThr, nGnd, 1e-8);
+          // Prevent singular matrix if GND pin left floating
+          stampConductance(nGnd, 0, 1e-9);
+
+          const vSup = (nodeVoltages[nVcc] ?? 0) - (nodeVoltages[nGnd] ?? 0);
+          const q = this.timer555States.get(comp.id) ?? false;
+          // Discharge transistor ON when Q is LOW and powered
+          stampConductance(nDis, nGnd, (vSup >= 2.0 && !q) ? 1 / 2.0 : 1e-8);
+        } else if (comp.type === 'adc') {
+          const inPin = comp.pins.find(p => p.name === 'IN');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const nIn = inPin ? (topology.pinToNode.get(inPin.id) ?? 0) : 0;
+          const nGnd = gndPin ? (topology.pinToNode.get(gndPin.id) ?? 0) : 0;
+          stampConductance(nIn, nGnd, 1e-7);
+          stampConductance(nGnd, 0, 1e-9);
+        } else if (comp.type === 'dac') {
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const nGnd = gndPin ? (topology.pinToNode.get(gndPin.id) ?? 0) : 0;
+          for (const bName of ['D0', 'D1', 'D2', 'D3']) {
+            const bPin = comp.pins.find(p => p.name === bName);
+            if (bPin) {
+              stampConductance(topology.pinToNode.get(bPin.id) ?? 0, nGnd, 1e-7);
+            }
+          }
+          stampConductance(nGnd, 0, 1e-9);
+        } else if (comp.type === 'seven_segment') {
+          const comPin = comp.pins.find(p => p.name === 'COM');
+          if (comPin) {
+            const nCom = topology.pinToNode.get(comPin.id) ?? 0;
+            const isAnode = comp.params.commonMode === 'anode';
+            const vf = comp.params.forwardVoltage ?? 1.8;
+            for (const sName of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp']) {
+              const sPin = comp.pins.find(p => p.name === sName);
+              if (!sPin) continue;
+              const nSeg = topology.pinToNode.get(sPin.id) ?? 0;
+              const na = isAnode ? nCom : nSeg;
+              const nk = isAnode ? nSeg : nCom;
+              const vd = (nodeVoltages[na] ?? 0) - (nodeVoltages[nk] ?? 0);
+              if (vd > vf) {
+                const rSeg = 40;
+                const gd = 1 / rSeg;
+                stampConductance(na, nk, gd);
+                stampCurrentSource(na, nk, -vf / rSeg);
+              } else {
+                stampConductance(na, nk, 1e-9);
+              }
+            }
+          }
+        } else if (
+          comp.type === 'gate_and' ||
+          comp.type === 'gate_or' ||
+          comp.type === 'gate_not' ||
+          comp.type === 'gate_nand' ||
+          comp.type === 'gate_nor' ||
+          comp.type === 'gate_xor' ||
+          comp.type === 'gate_xnor'
+        ) {
+          const aPin = comp.pins.find(p => p.name === 'A');
+          const bPin = comp.pins.find(p => p.name === 'B');
+          if (aPin) stampConductance(topology.pinToNode.get(aPin.id) ?? 0, 0, 1e-7);
+          if (bPin) stampConductance(topology.pinToNode.get(bPin.id) ?? 0, 0, 1e-7);
         }
       }
 
@@ -1124,6 +1363,220 @@ export class CircuitSimulator {
             secondaryVoltage: vS1 - vS2,
             secondaryCurrent: iSecondary,
           };
+        } else if (comp.type === 'incandescent_bulb') {
+          const R = Math.max(comp.params.resistance ?? 25, 0.5);
+          const ratedV = Math.max(comp.params.ratedVoltage ?? 5.0, 0.5);
+          const previouslyBlown = comp.state?.isBlown ?? false;
+          const isBlown = previouslyBlown || Math.abs(vDrop) > ratedV * 2.5;
+          current = isBlown ? 0 : vDrop / R;
+          const power = Math.abs(vDrop * current);
+          const ratedPower = (ratedV * ratedV) / R;
+          const instRatio = isBlown ? 0 : Math.min(power / Math.max(ratedPower, 1e-6), 1.4);
+          const prevT = this.bulbTemperatures.get(comp.id) ?? 0;
+          const alpha = Math.min(dt / 0.06, 1);
+          const nextT = isBlown ? 0 : prevT + alpha * (instRatio - prevT);
+          this.bulbTemperatures.set(comp.id, nextT);
+          comp.state = {
+            voltageDrop: vDrop,
+            current,
+            power,
+            brightness: isBlown ? 0 : Math.min(Math.max(nextT, 0), 1.3),
+            isBlown,
+          };
+        } else if (comp.type === 'dc_motor') {
+          const Ra = Math.max(comp.params.windingResistance ?? 10, 0.5);
+          const ratedV = Math.max(comp.params.ratedVoltage ?? 12, 0.5);
+          const ratedRpm = Math.max(comp.params.ratedRpm ?? 3000, 100);
+          const Ke = ratedV / ((ratedRpm * 2 * Math.PI) / 60);
+          const omega = this.motorSpeeds.get(comp.id) ?? 0;
+          const eb = Ke * omega;
+          current = (vDrop - eb) / Ra;
+          const G_base = (Ke * Ke) / Ra;
+          const B = 0.05 * G_base;
+          const J = 0.08 * G_base;
+          const nextOmega = omega + ((Ke * current - B * omega) / Math.max(J, 1e-9)) * dt;
+          this.motorSpeeds.set(comp.id, nextOmega);
+          const rpm = (nextOmega * 60) / (2 * Math.PI);
+          comp.state = {
+            voltageDrop: vDrop,
+            current,
+            power: Math.abs(vDrop * current),
+            rpm,
+          };
+        } else if (comp.type === 'ac_motor') {
+          const Ra = Math.max(comp.params.windingResistance ?? 20, 0.5);
+          const ratedV = Math.max(comp.params.ratedVoltage ?? 12, 0.5);
+          const ratedRpm = Math.max(comp.params.ratedRpm ?? 1500, 100);
+          current = vDrop / Ra;
+          const prevAvg = this.acMotorDcAvg.get(comp.id) ?? vDrop;
+          const nextAvg = prevAvg + Math.min(dt / 0.12, 1) * (vDrop - prevAvg);
+          this.acMotorDcAvg.set(comp.id, nextAvg);
+          const vAc = vDrop - nextAvg;
+          const prevSq = this.acMotorRmsSq.get(comp.id) ?? 0;
+          const nextSq = prevSq + Math.min(dt / 0.08, 1) * (vAc * vAc - prevSq);
+          this.acMotorRmsSq.set(comp.id, nextSq);
+          const vAcRms = Math.sqrt(Math.max(nextSq, 0));
+          const rpm = vAcRms > 0.35 ? Math.min((vAcRms / (ratedV * 0.707)) * ratedRpm, ratedRpm * 1.5) : 0;
+          comp.state = {
+            voltageDrop: vDrop,
+            current,
+            power: Math.abs(vDrop * current),
+            rpm,
+          };
+        } else if (comp.type === 'ohmmeter') {
+          const iTest = (1.0 - vDrop) / 1000;
+          let measuredResistance = Infinity;
+          if (vDrop < -0.05 || iTest < -1e-6) {
+            measuredResistance = Number.NaN; // External active voltage present
+          } else if (iTest <= 1e-8) {
+            measuredResistance = Infinity; // Open circuit (OL)
+          } else {
+            measuredResistance = Math.max(0, vDrop / iTest);
+          }
+          current = iTest;
+          comp.state = {
+            voltageDrop: vDrop,
+            current: iTest,
+            power: Math.abs(vDrop * iTest),
+            measuredResistance,
+          };
+        } else if (comp.type === 'timer_555') {
+          const vccPin = comp.pins.find(p => p.name === 'VCC');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const rstPin = comp.pins.find(p => p.name === 'RESET');
+          const trgPin = comp.pins.find(p => p.name === 'TRIG');
+          const thrPin = comp.pins.find(p => p.name === 'THRESH');
+          const ctlPin = comp.pins.find(p => p.name === 'CTRL');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          const vVcc = vccPin ? (pinVoltages.get(vccPin.id) ?? 0) : 0;
+          const vGnd = gndPin ? (pinVoltages.get(gndPin.id) ?? 0) : 0;
+          const vSup = vVcc - vGnd;
+          const vRst = rstPin ? (pinVoltages.get(rstPin.id) ?? 0) - vGnd : vSup;
+          const vTrg = trgPin ? (pinVoltages.get(trgPin.id) ?? 0) - vGnd : vSup;
+          const vThr = thrPin ? (pinVoltages.get(thrPin.id) ?? 0) - vGnd : 0;
+          const vCtl = ctlPin ? (pinVoltages.get(ctlPin.id) ?? 0) - vGnd : (2 / 3) * vSup;
+          const vUpper = vCtl > 0.2 ? vCtl : (2 / 3) * vSup;
+          const vLower = vUpper * 0.5;
+          let nextQ = this.timer555States.get(comp.id) ?? false;
+          if (vSup < 2.0 || vRst < 0.7) {
+            nextQ = false;
+          } else if (vTrg < vLower) {
+            nextQ = true;
+          } else if (vThr > vUpper) {
+            nextQ = false;
+          }
+          this.timer555States.set(comp.id, nextQ);
+          const vOut = outPin ? (pinVoltages.get(outPin.id) ?? 0) - vGnd : 0;
+          const bIdx = lastVoltageBranches.findIndex(b => b.compId === comp.id);
+          const numNodeUnknowns = Math.max(numNodes - 1, 0);
+          current = lastSolution && bIdx >= 0 ? -(lastSolution[numNodeUnknowns + bIdx] ?? 0) : 0;
+          vDrop = vOut;
+          comp.state = {
+            voltageDrop: vOut,
+            current,
+            power: Math.abs(vOut * current),
+            logicOutput: nextQ,
+          };
+        } else if (comp.type === 'adc') {
+          const inPin = comp.pins.find(p => p.name === 'IN');
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const vIn = inPin ? (pinVoltages.get(inPin.id) ?? 0) : 0;
+          const vGnd = gndPin ? (pinVoltages.get(gndPin.id) ?? 0) : 0;
+          const vin = vIn - vGnd;
+          const vref = Math.max(comp.params.vref ?? 5.0, 0.1);
+          const code = Math.round(Math.min(Math.max(vin / vref, 0), 1) * 15);
+          vDrop = vin;
+          current = 0;
+          comp.state = {
+            voltageDrop: vin,
+            current: 0,
+            power: 0,
+            digitalValue: code,
+          };
+        } else if (comp.type === 'dac') {
+          const gndPin = comp.pins.find(p => p.name === 'GND');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          const vGnd = gndPin ? (pinVoltages.get(gndPin.id) ?? 0) : 0;
+          const vth = comp.params.vth ?? 2.5;
+          let code = 0;
+          ['D0', 'D1', 'D2', 'D3'].forEach((bName, bit) => {
+            const bPin = comp.pins.find(p => p.name === bName);
+            if (bPin && (pinVoltages.get(bPin.id) ?? 0) - vGnd >= vth) {
+              code |= 1 << bit;
+            }
+          });
+          const vOut = outPin ? (pinVoltages.get(outPin.id) ?? 0) - vGnd : 0;
+          const bIdx = lastVoltageBranches.findIndex(b => b.compId === comp.id);
+          const numNodeUnknowns = Math.max(numNodes - 1, 0);
+          current = lastSolution && bIdx >= 0 ? -(lastSolution[numNodeUnknowns + bIdx] ?? 0) : 0;
+          vDrop = vOut;
+          comp.state = {
+            voltageDrop: vOut,
+            current,
+            power: Math.abs(vOut * current),
+            digitalValue: code,
+          };
+        } else if (comp.type === 'seven_segment') {
+          const comPin = comp.pins.find(p => p.name === 'COM');
+          const vCom = comPin ? (pinVoltages.get(comPin.id) ?? 0) : 0;
+          const isAnode = comp.params.commonMode === 'anode';
+          const vf = comp.params.forwardVoltage ?? 1.8;
+          const segLevels: number[] = [];
+          let totalCurrent = 0;
+          let maxVd = 0;
+          for (const sName of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp']) {
+            const sPin = comp.pins.find(p => p.name === sName);
+            const vSeg = sPin ? (pinVoltages.get(sPin.id) ?? 0) : 0;
+            const vd = isAnode ? vCom - vSeg : vSeg - vCom;
+            if (vd > maxVd) maxVd = vd;
+            const iSeg = vd > vf ? (vd - vf) / 40 : 0;
+            totalCurrent += iSeg;
+            segLevels.push(Math.min(Math.max(iSeg / 0.015, 0), 1));
+          }
+          current = totalCurrent;
+          vDrop = maxVd;
+          comp.state = {
+            voltageDrop: maxVd,
+            current: totalCurrent,
+            power: Math.abs(maxVd * totalCurrent),
+            segments: segLevels,
+          };
+        } else if (
+          comp.type === 'gate_and' ||
+          comp.type === 'gate_or' ||
+          comp.type === 'gate_not' ||
+          comp.type === 'gate_nand' ||
+          comp.type === 'gate_nor' ||
+          comp.type === 'gate_xor' ||
+          comp.type === 'gate_xnor'
+        ) {
+          const aPin = comp.pins.find(p => p.name === 'A');
+          const bPin = comp.pins.find(p => p.name === 'B');
+          const outPin = comp.pins.find(p => p.name === 'OUT');
+          const vth = comp.params.vth ?? 2.5;
+          const a = (aPin ? (pinVoltages.get(aPin.id) ?? 0) : 0) >= vth;
+          const b = (bPin ? (pinVoltages.get(bPin.id) ?? 0) : 0) >= vth;
+          let outHigh = false;
+          switch (comp.type) {
+            case 'gate_not': outHigh = !a; break;
+            case 'gate_and': outHigh = a && b; break;
+            case 'gate_or': outHigh = a || b; break;
+            case 'gate_nand': outHigh = !(a && b); break;
+            case 'gate_nor': outHigh = !(a || b); break;
+            case 'gate_xor': outHigh = a !== b; break;
+            case 'gate_xnor': outHigh = a === b; break;
+          }
+          const vOut = outPin ? (pinVoltages.get(outPin.id) ?? 0) : 0;
+          const bIdx = lastVoltageBranches.findIndex(b => b.compId === comp.id);
+          const numNodeUnknowns = Math.max(numNodes - 1, 0);
+          current = lastSolution && bIdx >= 0 ? -(lastSolution[numNodeUnknowns + bIdx] ?? 0) : 0;
+          vDrop = vOut;
+          comp.state = {
+            voltageDrop: vOut,
+            current,
+            power: Math.abs(vOut * current),
+            logicOutput: outHigh,
+          };
         } else if (
           comp.type === 'dc_source' ||
           comp.type === 'ac_source' ||
@@ -1143,6 +1596,21 @@ export class CircuitSimulator {
         componentCurrents.set(comp.id, current);
         if (
           comp.type !== 'led' &&
+          comp.type !== 'incandescent_bulb' &&
+          comp.type !== 'dc_motor' &&
+          comp.type !== 'ac_motor' &&
+          comp.type !== 'ohmmeter' &&
+          comp.type !== 'timer_555' &&
+          comp.type !== 'adc' &&
+          comp.type !== 'dac' &&
+          comp.type !== 'seven_segment' &&
+          comp.type !== 'gate_and' &&
+          comp.type !== 'gate_or' &&
+          comp.type !== 'gate_not' &&
+          comp.type !== 'gate_nand' &&
+          comp.type !== 'gate_nor' &&
+          comp.type !== 'gate_xor' &&
+          comp.type !== 'gate_xnor' &&
           comp.type !== 'npn' &&
           comp.type !== 'pnp' &&
           comp.type !== 'n_mosfet' &&

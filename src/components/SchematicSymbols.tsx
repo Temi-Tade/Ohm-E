@@ -482,7 +482,7 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           {/* Subtext info: only show warning if blown, no LED color or LED text label */}
           {isBlown && (
             <UprightText x={0} y={-30} rot={rot} textAnchor="middle" className="fill-rose-500 text-[10px] font-bold font-mono">
-              💥 BLOWN ({formatCurrent(state?.current ?? 0)})
+              BLOWN ({formatCurrent(state?.current ?? 0)})
             </UprightText>
           )}
         </g>
@@ -849,9 +849,9 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           {/* Pin Annotations */}
           <UprightText x={-26} y={-24} rot={rot} className="fill-slate-400 text-[8px] font-mono font-bold">+</UprightText>
           <UprightText x={-26} y={30} rot={rot} className="fill-slate-400 text-[8px] font-mono font-bold">−</UprightText>
-          <UprightText x={22} y={-28} rot={rot} textAnchor="end" className="fill-amber-400/90 text-[7.5px] font-mono font-bold">NC</UprightText>
-          <UprightText x={28} y={-5} rot={rot} textAnchor="end" className="fill-slate-300 text-[7.5px] font-mono font-bold">COM</UprightText>
-          <UprightText x={22} y={34} rot={rot} textAnchor="end" className="fill-emerald-400/90 text-[7.5px] font-mono font-bold">NO</UprightText>
+          <UprightText x={47} y={-37} rot={rot} textAnchor="start" className="fill-amber-400/90 text-[8px] font-mono font-bold">NC</UprightText>
+          <UprightText x={47} y={3} rot={rot} textAnchor="start" className="fill-slate-300 text-[8px] font-mono font-bold">COM</UprightText>
+          <UprightText x={47} y={43} rot={rot} textAnchor="start" className="fill-emerald-400/90 text-[8px] font-mono font-bold">NO</UprightText>
 
           {/* Status indicator dot & label */}
           <circle cx="-22" cy="-35" r="2.8" fill={isEnergized ? '#10b981' : '#334155'} />
@@ -1137,6 +1137,341 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             className="fill-cyan-300 text-[9px] font-mono pointer-events-none select-none font-bold"
           >
             MIC {soundLevel}dB
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'incandescent_bulb': {
+      const bright = Math.min(Math.max(state?.brightness ?? 0, 0), 1.3);
+      const isBlown = state?.isBlown ?? false;
+      const isLit = bright > 0.03 && !isBlown;
+      const glowRadius = 18 + bright * 28;
+      return (
+        <g className="select-none">
+          {isLit && (
+            <defs>
+              <radialGradient id={`bulb_glow_${component.id}`} cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#fef08a" stopOpacity={Math.min(0.85, bright * 0.75)} />
+                <stop offset="45%" stopColor="#f59e0b" stopOpacity={Math.min(0.45, bright * 0.35)} />
+                <stop offset="100%" stopColor="#f59e0b" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+          )}
+          {isLit && (
+            <circle cx="0" cy="0" r={glowRadius} fill={`url(#bulb_glow_${component.id})`} className="pointer-events-none" />
+          )}
+          <line x1="-40" y1="0" x2="-18" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="18" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle
+            cx="0"
+            cy="0"
+            r="18"
+            fill={isLit ? `rgba(251, 191, 36, ${Math.min(0.28, bright * 0.24)})` : '#0f172a'}
+            stroke={isBlown ? '#ef4444' : isLit ? '#fbbf24' : strokeColor}
+            strokeWidth={strokeWidth}
+          />
+          {!isBlown ? (
+            <path
+              d="M -18 0 L -10 0 L -7 -7 L -2 7 L 2 -7 L 7 7 L 10 0 L 18 0"
+              fill="none"
+              stroke={isLit ? '#fef08a' : '#64748b'}
+              strokeWidth={isLit ? 2.4 : 1.6}
+              strokeLinejoin="round"
+            />
+          ) : (
+            <path
+              d="M -18 0 L -10 0 L -6 -6 M 6 -6 L 10 0 L 18 0"
+              fill="none"
+              stroke="#ef4444"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          )}
+          {isBlown && (
+            <UprightText x={0} y={-24} rot={rot} textAnchor="middle" className="fill-rose-500 text-[9px] font-bold font-mono">
+              BLOWN
+            </UprightText>
+          )}
+        </g>
+      );
+    }
+
+    case 'dc_motor':
+    case 'ac_motor': {
+      const isAc = component.type === 'ac_motor';
+      const rpm = state?.rpm ?? 0;
+      const isSpinning = isRunning && Math.abs(rpm) > 3;
+      const angle = isSpinning ? ((performance.now() * 0.006 * rpm) % 360) : 0;
+      const accent = isAc ? '#fbbf24' : '#38bdf8';
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="0" x2="-22" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="22" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Brush lugs */}
+          <rect x="-25" y="-5" width="5" height="10" rx="1" fill="#334155" stroke={strokeColor} strokeWidth="1.2" />
+          <rect x="20" y="-5" width="5" height="10" rx="1" fill="#334155" stroke={strokeColor} strokeWidth="1.2" />
+          <circle cx="0" cy="0" r="22" fill="#0f172a" stroke={isSpinning ? accent : strokeColor} strokeWidth={strokeWidth} />
+          {/* Rotating rotor vanes */}
+          <g transform={`rotate(${angle.toFixed(1)})`} opacity={isSpinning ? 0.55 : 0.25}>
+            <line x1="0" y1="-17" x2="0" y2="17" stroke={accent} strokeWidth="1.8" strokeLinecap="round" />
+            <line x1="-14.7" y1="-8.5" x2="14.7" y2="8.5" stroke={accent} strokeWidth="1.8" strokeLinecap="round" />
+            <line x1="-14.7" y1="8.5" x2="14.7" y2="-8.5" stroke={accent} strokeWidth="1.8" strokeLinecap="round" />
+          </g>
+          <circle cx="0" cy="0" r="10" fill="#0f172a" stroke={accent} strokeWidth="1.2" />
+          <UprightText x={0} y={4} rot={rot} textAnchor="middle" className="fill-slate-100 text-[12px] font-bold font-mono">
+            {isAc ? 'M~' : 'M'}
+          </UprightText>
+          <UprightText x={0} y={-28} rot={rot} textAnchor="middle" className={`${isAc ? 'fill-amber-300' : 'fill-sky-300'} text-[10px] font-mono font-bold`}>
+            {Math.round(rpm)} RPM
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'ohmmeter': {
+      const rVal = state?.measuredResistance;
+      let display = 'OL';
+      if (rVal !== undefined) {
+        if (Number.isNaN(rVal)) display = 'LIVE!';
+        else if (!Number.isFinite(rVal) || rVal > 5e7) display = 'OL';
+        else display = formatResistance(rVal);
+      }
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="0" x2="-20" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="20" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="0" cy="0" r="20" fill="#0f172a" stroke="#a78bfa" strokeWidth={strokeWidth} />
+          <UprightText x={0} y={5} rot={rot} textAnchor="middle" className="fill-violet-400 text-[15px] font-bold font-mono">
+            Ω
+          </UprightText>
+          <UprightText x={0} y={-24} rot={rot} textAnchor="middle" className="fill-violet-300 text-[11px] font-mono font-bold">
+            {display}
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'timer_555': {
+      const qOut = state?.logicOutput ?? false;
+      return (
+        <g className="select-none">
+          {/* Pins left: RST(-40,-40), TRG(-40,-20), THR(-40,20), GND(-40,40) */}
+          <line x1="-40" y1="-40" x2="-28" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="-20" x2="-28" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-28" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="40" x2="-28" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* Pins right: VCC(40,-40), DIS(40,-20), OUT(40,0), CTL(40,40) */}
+          <line x1="28" y1="-40" x2="40" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="-20" x2="40" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="40" x2="40" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* DIP-8 Body */}
+          <rect x="-28" y="-48" width="56" height="96" rx="4" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M -7 -48 A 7 7 0 0 0 7 -48" fill="none" stroke={strokeColor} strokeWidth="1.4" />
+          {/* Pin labels */}
+          <UprightText x={-24} y={-37} rot={rot} className="fill-slate-400 text-[7px] font-mono">RST</UprightText>
+          <UprightText x={-24} y={-17} rot={rot} className="fill-slate-400 text-[7px] font-mono">TRG</UprightText>
+          <UprightText x={-24} y={23} rot={rot} className="fill-slate-400 text-[7px] font-mono">THR</UprightText>
+          <UprightText x={-24} y={43} rot={rot} className="fill-rose-400 text-[7px] font-mono">GND</UprightText>
+          <UprightText x={24} y={-37} rot={rot} textAnchor="end" className="fill-emerald-400 text-[7px] font-mono">VCC</UprightText>
+          <UprightText x={24} y={-17} rot={rot} textAnchor="end" className="fill-amber-400 text-[7px] font-mono">DIS</UprightText>
+          <UprightText x={24} y={3} rot={rot} textAnchor="end" className="fill-sky-400 text-[7px] font-mono font-bold">OUT</UprightText>
+          <UprightText x={24} y={43} rot={rot} textAnchor="end" className="fill-slate-400 text-[7px] font-mono">CTL</UprightText>
+          {/* Title & Q LED */}
+          <UprightText x={0} y={-1} rot={rot} textAnchor="middle" className="fill-slate-200 text-[10px] font-mono font-bold">555</UprightText>
+          <circle cx="0" cy="11" r="3.2" fill={qOut ? '#10b981' : '#334155'} stroke={qOut ? '#34d399' : '#475569'} strokeWidth="1" />
+        </g>
+      );
+    }
+
+    case 'adc': {
+      const code = state?.digitalValue ?? 0;
+      const bin = code.toString(2).padStart(4, '0');
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="-20" x2="-28" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-28" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="-40" x2="40" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="-20" x2="40" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="20" x2="40" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <rect x="-28" y="-48" width="56" height="80" rx="4" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <UprightText x={-24} y={-17} rot={rot} className="fill-sky-400 text-[7.5px] font-mono font-bold">IN</UprightText>
+          <UprightText x={-24} y={23} rot={rot} className="fill-rose-400 text-[7px] font-mono">GND</UprightText>
+          <UprightText x={24} y={-37} rot={rot} textAnchor="end" className="fill-emerald-400 text-[7px] font-mono">D3</UprightText>
+          <UprightText x={24} y={-17} rot={rot} textAnchor="end" className="fill-emerald-400 text-[7px] font-mono">D2</UprightText>
+          <UprightText x={24} y={3} rot={rot} textAnchor="end" className="fill-emerald-400 text-[7px] font-mono">D1</UprightText>
+          <UprightText x={24} y={23} rot={rot} textAnchor="end" className="fill-emerald-400 text-[7px] font-mono">D0</UprightText>
+          <UprightText x={-1} y={-5} rot={rot} textAnchor="middle" className="fill-slate-200 text-[9px] font-mono font-bold">ADC</UprightText>
+          <UprightText x={-1} y={7} rot={rot} textAnchor="middle" className="fill-cyan-300 text-[8px] font-mono font-bold">{bin}</UprightText>
+        </g>
+      );
+    }
+
+    case 'dac': {
+      const code = state?.digitalValue ?? 0;
+      const vOut = state?.voltageDrop ?? 0;
+      const bin = code.toString(2).padStart(4, '0');
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="-40" x2="-28" y2="-40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="-20" x2="-28" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="0" x2="-28" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-28" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="0" y1="32" x2="0" y2="40" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="28" y1="0" x2="40" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <rect x="-28" y="-48" width="56" height="80" rx="4" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <UprightText x={-24} y={-37} rot={rot} className="fill-emerald-400 text-[7px] font-mono">D3</UprightText>
+          <UprightText x={-24} y={-17} rot={rot} className="fill-emerald-400 text-[7px] font-mono">D2</UprightText>
+          <UprightText x={-24} y={3} rot={rot} className="fill-emerald-400 text-[7px] font-mono">D1</UprightText>
+          <UprightText x={-24} y={23} rot={rot} className="fill-emerald-400 text-[7px] font-mono">D0</UprightText>
+          <UprightText x={0} y={28} rot={rot} textAnchor="middle" className="fill-rose-400 text-[6.5px] font-mono">GND</UprightText>
+          <UprightText x={24} y={3} rot={rot} textAnchor="end" className="fill-sky-400 text-[7.5px] font-mono font-bold">OUT</UprightText>
+          <UprightText x={2} y={-12} rot={rot} textAnchor="middle" className="fill-slate-200 text-[9px] font-mono font-bold">DAC</UprightText>
+          <UprightText x={2} y={0} rot={rot} textAnchor="middle" className="fill-emerald-300 text-[7.5px] font-mono">{bin}</UprightText>
+          <UprightText x={2} y={11} rot={rot} textAnchor="middle" className="fill-sky-300 text-[7.5px] font-mono font-bold">{vOut.toFixed(2)}V</UprightText>
+        </g>
+      );
+    }
+
+    case 'seven_segment': {
+      const segs = state?.segments ?? [0, 0, 0, 0, 0, 0, 0, 0];
+      const colorMap: Record<string, string> = {
+        red: '#ef4444',
+        green: '#22c55e',
+        blue: '#3b82f6',
+        yellow: '#eab308',
+        white: '#f8fafc',
+      };
+      const litColor = colorMap[params.ledColor || 'red'];
+      const segStroke = (idx: number) => (segs[idx] ?? 0) > 0.08 ? litColor : '#1e293b';
+      const segOpacity = (idx: number) => {
+        const v = segs[idx] ?? 0;
+        return v > 0.08 ? Math.min(1, 0.35 + v * 0.65) : 1;
+      };
+      return (
+        <g className="select-none">
+          {/* Left pins: a, b, c, d, COM */}
+          {[-40, -20, 0, 20, 40].map((py) => (
+            <line key={`l_${py}`} x1="-40" y1={py} x2="-28" y2={py} stroke={strokeColor} strokeWidth={strokeWidth} />
+          ))}
+          {/* Right pins: e, f, g, dp */}
+          {[-40, -20, 0, 20].map((py) => (
+            <line key={`r_${py}`} x1="28" y1={py} x2="40" y2={py} stroke={strokeColor} strokeWidth={strokeWidth} />
+          ))}
+          <rect x="-28" y="-48" width="56" height="96" rx="5" fill="#090c12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {/* 7-Segment Geometry (a,b,c,d,e,f,g,dp) */}
+          {/* a: top horizontal */}
+          <line x1="-10" y1="-32" x2="10" y2="-32" stroke={segStroke(0)} strokeOpacity={segOpacity(0)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* b: top-right vertical */}
+          <line x1="12" y1="-29" x2="12" y2="-3" stroke={segStroke(1)} strokeOpacity={segOpacity(1)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* c: bottom-right vertical */}
+          <line x1="12" y1="3" x2="12" y2="29" stroke={segStroke(2)} strokeOpacity={segOpacity(2)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* d: bottom horizontal */}
+          <line x1="-10" y1="32" x2="10" y2="32" stroke={segStroke(3)} strokeOpacity={segOpacity(3)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* e: bottom-left vertical */}
+          <line x1="-12" y1="3" x2="-12" y2="29" stroke={segStroke(4)} strokeOpacity={segOpacity(4)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* f: top-left vertical */}
+          <line x1="-12" y1="-29" x2="-12" y2="-3" stroke={segStroke(5)} strokeOpacity={segOpacity(5)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* g: middle horizontal */}
+          <line x1="-10" y1="0" x2="10" y2="0" stroke={segStroke(6)} strokeOpacity={segOpacity(6)} strokeWidth="4.5" strokeLinecap="round" />
+          {/* dp: decimal point */}
+          <circle cx="19" cy="32" r="2.8" fill={segStroke(7)} fillOpacity={segOpacity(7)} />
+          {/* Pin labels */}
+          <UprightText x={-24} y={-37} rot={rot} className="fill-slate-400 text-[7px] font-mono">a</UprightText>
+          <UprightText x={-24} y={-17} rot={rot} className="fill-slate-400 text-[7px] font-mono">b</UprightText>
+          <UprightText x={-24} y={3} rot={rot} className="fill-slate-400 text-[7px] font-mono">c</UprightText>
+          <UprightText x={-24} y={23} rot={rot} className="fill-slate-400 text-[7px] font-mono">d</UprightText>
+          <UprightText x={-24} y={43} rot={rot} className="fill-amber-400 text-[6.5px] font-mono font-bold">
+            {params.commonMode === 'anode' ? 'COM+' : 'COM-'}
+          </UprightText>
+          <UprightText x={24} y={-37} rot={rot} textAnchor="end" className="fill-slate-400 text-[7px] font-mono">e</UprightText>
+          <UprightText x={24} y={-17} rot={rot} textAnchor="end" className="fill-slate-400 text-[7px] font-mono">f</UprightText>
+          <UprightText x={24} y={3} rot={rot} textAnchor="end" className="fill-slate-400 text-[7px] font-mono">g</UprightText>
+          <UprightText x={24} y={23} rot={rot} textAnchor="end" className="fill-slate-400 text-[7px] font-mono">dp</UprightText>
+        </g>
+      );
+    }
+
+    case 'gate_not': {
+      const outHigh = state?.logicOutput ?? false;
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="0" x2="-22" y2="0" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <polygon points="-22,-20 -22,20 14,0" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <circle cx="19" cy="0" r="4.5" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="23.5" y1="0" x2="40" y2="0" stroke={outHigh ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+          <circle cx="-6" cy="0" r="2.5" fill={outHigh ? '#10b981' : '#334155'} />
+          <UprightText x={0} y={-24} rot={rot} textAnchor="middle" className="fill-slate-400 text-[9px] font-mono font-bold">NOT</UprightText>
+        </g>
+      );
+    }
+
+    case 'gate_and':
+    case 'gate_nand': {
+      const isInverted = component.type === 'gate_nand';
+      const outHigh = state?.logicOutput ?? false;
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="-20" x2="-22" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-22" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path
+            d="M -22 -26 H 0 A 26 26 0 0 1 0 26 H -22 Z"
+            fill="#0f172a"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinejoin="round"
+          />
+          {isInverted ? (
+            <>
+              <circle cx="30" cy="0" r="4.5" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+              <line x1="34.5" y1="0" x2="40" y2="0" stroke={outHigh ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+            </>
+          ) : (
+            <line x1="26" y1="0" x2="40" y2="0" stroke={outHigh ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+          )}
+          <circle cx="4" cy="0" r="2.8" fill={outHigh ? '#10b981' : '#334155'} />
+          <UprightText x={-10} y={3} rot={rot} textAnchor="middle" className="fill-slate-300 text-[9px] font-mono font-bold">
+            {isInverted ? 'NAND' : 'AND'}
+          </UprightText>
+        </g>
+      );
+    }
+
+    case 'gate_or':
+    case 'gate_nor':
+    case 'gate_xor':
+    case 'gate_xnor': {
+      const isXor = component.type === 'gate_xor' || component.type === 'gate_xnor';
+      const isInverted = component.type === 'gate_nor' || component.type === 'gate_xnor';
+      const outHigh = state?.logicOutput ?? false;
+      const label = component.type.replace('gate_', '').toUpperCase();
+      return (
+        <g className="select-none">
+          <line x1="-40" y1="-20" x2="-19" y2="-20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="-40" y1="20" x2="-19" y2="20" stroke={strokeColor} strokeWidth={strokeWidth} />
+          {isXor && (
+            <path d="M -26 -26 Q -14 0 -26 26" fill="none" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinecap="round" />
+          )}
+          <path
+            d="M -20 -26 Q 6 -26 26 0 Q 6 26 -20 26 Q -8 0 -20 -26 Z"
+            fill="#0f172a"
+            stroke={strokeColor}
+            strokeWidth={strokeWidth}
+            strokeLinejoin="round"
+          />
+          {isInverted ? (
+            <>
+              <circle cx="30.5" cy="0" r="4.5" fill="#0f172a" stroke={strokeColor} strokeWidth={strokeWidth} />
+              <line x1="35" y1="0" x2="40" y2="0" stroke={outHigh ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+            </>
+          ) : (
+            <line x1="26" y1="0" x2="40" y2="0" stroke={outHigh ? '#10b981' : strokeColor} strokeWidth={strokeWidth} />
+          )}
+          <circle cx="14" cy="0" r="2.6" fill={outHigh ? '#10b981' : '#334155'} />
+          <UprightText x={-2} y={3} rot={rot} textAnchor="middle" className="fill-slate-300 text-[8.5px] font-mono font-bold">
+            {label}
           </UprightText>
         </g>
       );

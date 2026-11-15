@@ -16,6 +16,7 @@ import { Oscilloscope } from './components/Oscilloscope';
 import { RotateCw, Copy, Trash2, X, Sliders, Activity } from 'lucide-react';
 import { Toolbar } from './components/Toolbar';
 import { HelpModal } from './components/HelpModal';
+import { ExportModal } from './components/ExportModal';
 
 const CHANNEL_COLORS = ['#f97316', '#06b6d4', '#10b981']; // Ch0 Orange, Ch1 Cyan, Ch2 Emerald Green
 
@@ -72,8 +73,9 @@ export default function App() {
   const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState<boolean>(false);
   const [isMobileInspectorOpen, setIsMobileInspectorOpen] = useState<boolean>(false);
 
-  // Help modal
+  // Help & Export modals
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [isExportOpen, setIsExportOpen] = useState<boolean>(false);
 
   // Hidden file input for JSON import
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -698,27 +700,6 @@ export default function App() {
     lastProbedCompRef.current = null;
   };
 
-  // Export JSON
-  const handleExportJson = () => {
-    const data = {
-      version: '1.0',
-      timestamp: Date.now(),
-      components,
-      wires,
-      timebase,
-      voltsPerDiv,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `circuit_schematic_${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   // Import JSON
   const handleImportJson = () => {
     fileInputRef.current?.click();
@@ -731,17 +712,19 @@ export default function App() {
     reader.onload = (ev) => {
       try {
         const parsed = JSON.parse(ev.target?.result as string);
-        if (parsed.components && parsed.wires) {
+        const importedComponents = parsed.components ?? parsed.internalComponents;
+        const importedWires = parsed.wires ?? parsed.internalWires;
+        if (importedComponents && importedWires) {
           recordSnapshot();
           simulatorRef.current.reset();
           simTimeRef.current = 0;
           samplesBufferRef.current = [];
           setScopeSamples([]);
-          setComponents(parsed.components);
-          setWires(parsed.wires);
+          setComponents(importedComponents);
+          setWires(importedWires);
           if (parsed.timebase) setTimebase(parsed.timebase);
           if (parsed.voltsPerDiv) setVoltsPerDiv(parsed.voltsPerDiv);
-          lastProbedCompRef.current = parsed.components[0] ?? null;
+          lastProbedCompRef.current = importedComponents[0] ?? null;
         }
       } catch (err) {
         // Ignore invalid file
@@ -788,7 +771,7 @@ export default function App() {
         onRedo={handleRedo}
         presets={presets}
         onLoadPreset={handleLoadPreset}
-        onExportJson={handleExportJson}
+        onExportJson={() => setIsExportOpen(true)}
         onImportJson={handleImportJson}
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenMobilePalette={() => setIsMobilePaletteOpen(true)}
@@ -1077,6 +1060,16 @@ export default function App() {
 
       {/* Quick Guide & Shortcuts Modal */}
       <HelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+
+      {/* Multi-Format Export Modal */}
+      <ExportModal
+        isOpen={isExportOpen}
+        onClose={() => setIsExportOpen(false)}
+        components={components}
+        wires={wires}
+        timebase={timebase}
+        voltsPerDiv={voltsPerDiv}
+      />
     </div>
   );
 }

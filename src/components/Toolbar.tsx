@@ -272,14 +272,14 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
           </button>
 
-          {/* Export / Import JSON */}
+          {/* Export / Import */}
           <button
             onClick={onExportJson}
-            title="Export Circuit File (.json)"
-            aria-label="Export Circuit File"
+            title="Export Circuit (JSON, PDF, PNG, Chip, PCB)"
+            aria-label="Export Circuit"
             className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#8b909f] hover:text-[#cfd3dd] transition-colors cursor-pointer shrink-0"
           >
-            <Download className="w-4 h-4" />
+            <Upload className="w-4 h-4" />
           </button>
           <button
             onClick={onImportJson}
@@ -287,7 +287,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             aria-label="Import Circuit File"
             className="p-1.5 sm:p-2 rounded-md bg-[#1e2026] border border-[#2b2e37] hover:bg-[#272a33] text-[#8b909f] hover:text-[#cfd3dd] transition-colors cursor-pointer shrink-0"
           >
-            <Upload className="w-4 h-4" />
+            <Download className="w-4 h-4" />
           </button>
 
           {/* Clear Canvas */}
@@ -385,7 +385,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }}
                   className="p-1.5 rounded bg-[#20232a] text-[11px] flex items-center justify-center gap-1 text-[#dce0e8] hover:bg-[#282c35]"
                 >
-                  <Download className="w-3.5 h-3.5" />
+                  <Upload className="w-3.5 h-3.5" />
                   <span>Export</span>
                 </button>
                 <button
@@ -395,7 +395,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
                   }}
                   className="p-1.5 rounded bg-[#20232a] text-[11px] flex items-center justify-center gap-1 text-[#dce0e8] hover:bg-[#282c35]"
                 >
-                  <Upload className="w-3.5 h-3.5" />
+                  <Download className="w-3.5 h-3.5" />
                   <span>Import</span>
                 </button>
                 <button

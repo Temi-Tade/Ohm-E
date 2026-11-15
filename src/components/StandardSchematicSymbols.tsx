@@ -384,6 +384,179 @@ export const StandardSymbolIcon: React.FC<StandardSymbolIconProps> = ({ type, cl
         </svg>
       );
 
+    case 'incandescent_bulb':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="12" cy="12" r="7" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 8.5 14 L 10 9.5 L 12 13 L 14 9.5 L 15.5 14" stroke="#fbbf24" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+          <line x1="1" y1="12" x2="5" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="19" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'dc_motor':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="12" cy="11" r="7" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 9 14 V 8 L 12 12 L 15 8 V 14" stroke={strokeColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+          <line x1="8" y1="20" x2="16" y2="20" stroke="#38bdf8" strokeWidth={1.4} strokeLinecap="round" />
+          <line x1="1" y1="11" x2="5" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="19" y1="11" x2="23" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'ac_motor':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="12" cy="11" r="7" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 9 13.5 V 8 L 12 11.5 L 15 8 V 13.5" stroke={strokeColor} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M 8 20 Q 10 18 12 20 Q 14 22 16 20" stroke="#fbbf24" strokeWidth={1.4} strokeLinecap="round" />
+          <line x1="1" y1="11" x2="5" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="19" y1="11" x2="23" y2="11" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'ohmmeter':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <circle cx="12" cy="12" r="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="1" y1="12" x2="4" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="20" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 8 15.5 H 10.2 C 8.5 13.5 8.5 8.5 12 8.5 C 15.5 8.5 15.5 13.5 13.8 15.5 H 16" stroke="#a78bfa" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      );
+
+    case 'timer_555':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="6" y="4" width="12" height="16" rx="2" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 10 4 A 2 2 0 0 0 14 4" stroke={strokeColor} strokeWidth={1.2} />
+          <line x1="2" y1="7" x2="6" y2="7" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="2" y1="10.5" x2="6" y2="10.5" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="2" y1="13.5" x2="6" y2="13.5" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="2" y1="17" x2="6" y2="17" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="18" y1="7" x2="22" y2="7" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="18" y1="10.5" x2="22" y2="10.5" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="18" y1="13.5" x2="22" y2="13.5" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="18" y1="17" x2="22" y2="17" stroke={strokeColor} strokeWidth={1.3} />
+        </svg>
+      );
+
+    case 'adc':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="5" y="4" width="14" height="16" rx="2" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 7.5 12 Q 9 9 10.5 12 Q 11.5 14 12.5 12" stroke="#38bdf8" strokeWidth={1.3} fill="none" />
+          <path d="M 13.5 14 V 10 H 16.5 V 14" stroke="#34d399" strokeWidth={1.3} fill="none" />
+          <line x1="1" y1="12" x2="5" y2="12" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="19" y1="8" x2="23" y2="8" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="19" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="19" y1="16" x2="23" y2="16" stroke={strokeColor} strokeWidth={1.3} />
+        </svg>
+      );
+
+    case 'dac':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="5" y="4" width="14" height="16" rx="2" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 7.5 14 V 10 H 10.5 V 14" stroke="#34d399" strokeWidth={1.3} fill="none" />
+          <path d="M 12 12 Q 13.5 9 15 12 Q 16 14 17 12" stroke="#38bdf8" strokeWidth={1.3} fill="none" />
+          <line x1="1" y1="8" x2="5" y2="8" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="1" y1="12" x2="5" y2="12" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="1" y1="16" x2="5" y2="16" stroke={strokeColor} strokeWidth={1.3} />
+          <line x1="19" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={1.4} />
+        </svg>
+      );
+
+    case 'seven_segment':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <rect x="6" y="3" width="12" height="18" rx="2" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="9" y1="6.5" x2="15" y2="6.5" stroke="#ef4444" strokeWidth={1.6} strokeLinecap="round" />
+          <line x1="15.5" y1="7" x2="15.5" y2="11.5" stroke="#ef4444" strokeWidth={1.6} strokeLinecap="round" />
+          <line x1="15.5" y1="12.5" x2="15.5" y2="17" stroke="#ef4444" strokeWidth={1.6} strokeLinecap="round" />
+          <line x1="9" y1="12" x2="15" y2="12" stroke="#ef4444" strokeWidth={1.6} strokeLinecap="round" />
+          <line x1="9" y1="17.5" x2="15" y2="17.5" stroke="#ef4444" strokeWidth={1.6} strokeLinecap="round" />
+          <line x1="8.5" y1="7" x2="8.5" y2="11.5" stroke={strokeColor} strokeWidth={1.3} strokeLinecap="round" opacity="0.35" />
+          <line x1="8.5" y1="12.5" x2="8.5" y2="17" stroke={strokeColor} strokeWidth={1.3} strokeLinecap="round" opacity="0.35" />
+        </svg>
+      );
+
+    case 'gate_and':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="2" y1="8" x2="6" y2="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="2" y1="16" x2="6" y2="16" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 6 5 H 12 A 7 7 0 0 1 12 19 H 6 Z" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <line x1="19" y1="12" x2="22" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'gate_nand':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="2" y1="8" x2="5" y2="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="2" y1="16" x2="5" y2="16" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 5 5 H 10.5 A 6.5 7 0 0 1 10.5 19 H 5 Z" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <circle cx="18.8" cy="12" r="1.8" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="20.6" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'gate_or':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="2" y1="8" x2="7" y2="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="2" y1="16" x2="7" y2="16" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 5 5 Q 13 5 19 12 Q 13 19 5 19 Q 8.5 12 5 5 Z" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <line x1="19" y1="12" x2="22" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'gate_nor':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="2" y1="8" x2="6.5" y2="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="2" y1="16" x2="6.5" y2="16" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 5 5 Q 11.5 5 17 12 Q 11.5 19 5 19 Q 8 12 5 5 Z" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <circle cx="19" cy="12" r="1.8" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="20.8" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'gate_xor':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="1.5" y1="8" x2="5" y2="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="1.5" y1="16" x2="5" y2="16" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 4 5 Q 7 12 4 19" stroke={strokeColor} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+          <path d="M 7 5 Q 14 5 19.5 12 Q 14 19 7 19 Q 10 12 7 5 Z" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <line x1="19.5" y1="12" x2="22.5" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'gate_xnor':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="1.5" y1="8" x2="4.5" y2="8" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <line x1="1.5" y1="16" x2="4.5" y2="16" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <path d="M 3.5 5 Q 6.5 12 3.5 19" stroke={strokeColor} strokeWidth={1.4} strokeLinecap="round" fill="none" />
+          <path d="M 6.5 5 Q 12 5 17 12 Q 12 19 6.5 19 Q 9 12 6.5 5 Z" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <circle cx="19" cy="12" r="1.8" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="20.8" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
+    case 'gate_not':
+      return (
+        <svg viewBox="0 0 24 24" fill="none" className={className}>
+          <line x1="2" y1="12" x2="6" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+          <polygon points="6,5 6,19 16.5,12" stroke={strokeColor} strokeWidth={strokeWidth} strokeLinejoin="round" />
+          <circle cx="18.5" cy="12" r="1.8" stroke={strokeColor} strokeWidth={1.4} />
+          <line x1="20.3" y1="12" x2="23" y2="12" stroke={strokeColor} strokeWidth={strokeWidth} />
+        </svg>
+      );
+
     default:
       return null;
   }

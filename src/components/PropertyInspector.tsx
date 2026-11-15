@@ -13,9 +13,10 @@ import {
   Layers,
   Thermometer,
   ShieldAlert,
+  X,
 } from 'lucide-react';
 import { CircuitComponent, Wire } from '../types/circuit';
-import { formatVoltage, formatCurrent } from './SchematicSymbols';
+import { formatVoltage, formatCurrent, formatResistance } from './SchematicSymbols';
 
 interface PropertyInspectorProps {
   selectedComponent: CircuitComponent | null;
@@ -65,8 +66,9 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
         <button
           onClick={onClose}
           className="text-[#717684] hover:text-white p-1 rounded-md hover:bg-[#252831] transition-colors cursor-pointer"
+          aria-label="Close inspector"
         >
-          ✕
+          <X className="w-4 h-4" />
         </button>
       </div>
 
@@ -142,6 +144,103 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                   }`}
                 >
                   {selectedComponent.state.energized ? 'ENERGIZED (COM → NO)' : 'IDLE (COM → NC)'}
+                </span>
+              </div>
+            )}
+
+            {/* Ohmmeter Telemetry */}
+            {selectedComponent.type === 'ohmmeter' && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400 font-sans">Measured R:</span>
+                {(() => {
+                  const mr = selectedComponent.state.measuredResistance;
+                  if (mr !== undefined && Number.isNaN(mr)) {
+                    return <span className="text-rose-400 font-bold">LIVE! (External V)</span>;
+                  }
+                  if (mr === undefined || !Number.isFinite(mr) || mr > 1e8) {
+                    return <span className="text-amber-400 font-bold">OL (Open Loop)</span>;
+                  }
+                  return <span className="text-emerald-400 font-bold">{formatResistance(mr)}</span>;
+                })()}
+              </div>
+            )}
+
+            {/* Incandescent Bulb Status */}
+            {selectedComponent.type === 'incandescent_bulb' && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px]">
+                <span className="text-slate-400">Filament Glow:</span>
+                {selectedComponent.state.isBlown ? (
+                  <span className="text-rose-400 font-bold flex items-center gap-1">
+                    <ShieldAlert className="w-3.5 h-3.5" /> Filament Blown
+                  </span>
+                ) : (
+                  <span className="text-amber-300 font-mono font-semibold">
+                    {Math.round((selectedComponent.state.brightness ?? 0) * 100)}%
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* DC & AC Motor Telemetry */}
+            {(selectedComponent.type === 'dc_motor' || selectedComponent.type === 'ac_motor') && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400 font-sans">Shaft Speed:</span>
+                <span className="text-cyan-400 font-bold">
+                  {Math.round(selectedComponent.state.rpm ?? 0)} RPM
+                </span>
+              </div>
+            )}
+
+            {/* 555 Timer Telemetry */}
+            {selectedComponent.type === 'timer_555' && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400 font-sans">Flip-Flop Output (Q):</span>
+                <span
+                  className={`font-bold ${
+                    selectedComponent.state.logicOutput ? 'text-emerald-400' : 'text-slate-400'
+                  }`}
+                >
+                  {selectedComponent.state.logicOutput ? 'HIGH (1)' : 'LOW (0)'}
+                </span>
+              </div>
+            )}
+
+            {/* 4-Bit ADC & DAC Telemetry */}
+            {(selectedComponent.type === 'adc' || selectedComponent.type === 'dac') && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400 font-sans">Digital Word:</span>
+                <span className="text-sky-300 font-bold">
+                  {(selectedComponent.state.digitalValue ?? 0).toString(2).padStart(4, '0')} (
+                  {selectedComponent.state.digitalValue ?? 0})
+                </span>
+              </div>
+            )}
+
+            {/* Logic Gate Telemetry */}
+            {selectedComponent.type.startsWith('gate_') && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400 font-sans">Logic Output (Y):</span>
+                <span
+                  className={`font-bold ${
+                    selectedComponent.state.logicOutput ? 'text-emerald-400' : 'text-slate-400'
+                  }`}
+                >
+                  {selectedComponent.state.logicOutput ? 'HIGH (1)' : 'LOW (0)'}
+                </span>
+              </div>
+            )}
+
+            {/* 7-Segment Display Telemetry */}
+            {selectedComponent.type === 'seven_segment' && (
+              <div className="mt-1 pt-1.5 border-t border-[#262832] flex items-center justify-between text-[11px] font-mono">
+                <span className="text-slate-400 font-sans">Lit Segments:</span>
+                <span className="text-emerald-300 font-bold">
+                  {(() => {
+                    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp'];
+                    const segs = selectedComponent.state.segments || [];
+                    const lit = names.filter((_, idx) => (segs[idx] ?? 0) > 0.15);
+                    return lit.length > 0 ? lit.join(', ') : 'None';
+                  })()}
                 </span>
               </div>
             )}
@@ -1133,6 +1232,310 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
                 >
                   {selectedComponent.params.closed ? 'Open Switch' : 'Close Switch'}
                 </button>
+              </div>
+            )}
+
+            {/* Incandescent Bulb Ratings */}
+            {selectedComponent.type === 'incandescent_bulb' && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Rated Voltage:</span>
+                  <span className="font-mono text-amber-300 font-bold">
+                    {(selectedComponent.params.ratedVoltage ?? 5).toFixed(1)} V
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="240"
+                    value={selectedComponent.params.ratedVoltage ?? 5}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0) {
+                        onUpdateComponentParams(selectedComponent.id, { ratedVoltage: val });
+                      }
+                    }}
+                    className="w-full bg-[#121317] border border-[#2d313b] focus:border-amber-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                  />
+                  <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                </div>
+              </div>
+            )}
+
+            {/* DC & AC Motor Parameters */}
+            {(selectedComponent.type === 'dc_motor' || selectedComponent.type === 'ac_motor') && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Motor Specs:</span>
+                  <span className="font-mono text-cyan-400 font-bold">
+                    {selectedComponent.params.ratedVoltage ?? 12}V · {selectedComponent.params.ratedRpm ?? (selectedComponent.type === 'dc_motor' ? 3000 : 1500)} RPM
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Rated V</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="1"
+                        min="1"
+                        max="240"
+                        value={selectedComponent.params.ratedVoltage ?? 12}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { ratedVoltage: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-cyan-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Rated RPM</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="100"
+                        min="100"
+                        max="20000"
+                        value={selectedComponent.params.ratedRpm ?? (selectedComponent.type === 'dc_motor' ? 3000 : 1500)}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { ratedRpm: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-cyan-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">RPM</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#717684] block mb-0.5">Winding Resistance</span>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="1"
+                      min="0.5"
+                      max="1000"
+                      value={selectedComponent.params.windingResistance ?? (selectedComponent.type === 'dc_motor' ? 10 : 20)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val > 0) {
+                          onUpdateComponentParams(selectedComponent.id, { windingResistance: val });
+                        }
+                      }}
+                      className="w-full bg-[#121317] border border-[#2d313b] focus:border-cyan-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                    />
+                    <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Ω</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 7-Segment Display Mode & Color */}
+            {selectedComponent.type === 'seven_segment' && (
+              <div className="space-y-2.5 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="space-y-1">
+                  <span className="text-[#8b909f] text-[11px]">Common Pin Configuration:</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([
+                      { id: 'cathode', label: 'Common Cathode' },
+                      { id: 'anode', label: 'Common Anode' },
+                    ] as const).map((m) => (
+                      <button
+                        key={m.id}
+                        onClick={() =>
+                          onUpdateComponentParams(selectedComponent.id, { commonMode: m.id })
+                        }
+                        className={`py-1.5 px-2 rounded text-[10px] font-medium border cursor-pointer transition-colors ${
+                          (selectedComponent.params.commonMode || 'cathode') === m.id
+                            ? 'bg-sky-500/20 text-sky-300 border-sky-500'
+                            : 'bg-[#15171b] text-[#8b909f] border-[#252830]'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <span className="text-[#8b909f] text-[11px]">Segment Color:</span>
+                  <div className="flex gap-2.5">
+                    {[
+                      { id: 'red', bg: '#ef4444', label: 'Red' },
+                      { id: 'green', bg: '#22c55e', label: 'Green' },
+                      { id: 'blue', bg: '#3b82f6', label: 'Blue' },
+                      { id: 'yellow', bg: '#eab308', label: 'Yellow' },
+                      { id: 'white', bg: '#f8fafc', label: 'White' },
+                    ].map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() =>
+                          onUpdateComponentParams(selectedComponent.id, {
+                            ledColor: c.id as CircuitComponent['params']['ledColor'],
+                          })
+                        }
+                        title={c.label}
+                        className={`w-6 h-6 rounded-full border-2 transition-transform cursor-pointer ${
+                          (selectedComponent.params.ledColor || 'red') === c.id
+                            ? 'scale-110 border-white shadow-md'
+                            : 'border-[#2d313b] hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: c.bg }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ADC & DAC Parameters */}
+            {(selectedComponent.type === 'adc' || selectedComponent.type === 'dac') && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Reference Voltage (Vref):</span>
+                  <span className="font-mono text-sky-400 font-bold">
+                    {(selectedComponent.params.vref ?? 5.0).toFixed(1)} V
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="1"
+                    max="24"
+                    value={selectedComponent.params.vref ?? 5.0}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      if (!isNaN(val) && val > 0) {
+                        onUpdateComponentParams(selectedComponent.id, { vref: val });
+                      }
+                    }}
+                    className="w-full bg-[#121317] border border-[#2d313b] focus:border-sky-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                  />
+                  <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">Vref</span>
+                </div>
+                {selectedComponent.type === 'adc' ? (
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Logic High Voltage (Vcc)</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="1.5"
+                        max="15"
+                        value={selectedComponent.params.vcc ?? 5.0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { vcc: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-sky-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Input Logic Threshold (Vth)</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        max="10"
+                        value={selectedComponent.params.vth ?? 2.5}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { vth: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-sky-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 555 Timer Pinout Reference */}
+            {selectedComponent.type === 'timer_555' && (
+              <div className="space-y-1.5 p-2 rounded-lg bg-[#181a20] border border-[#252831] text-[10px]">
+                <span className="text-[#8b909f] font-semibold block">NE555 Pinout Reference</span>
+                <div className="grid grid-cols-2 gap-1 font-mono text-[#94a3b8]">
+                  <span>RST: Reset (Active Low)</span>
+                  <span>VCC: Supply (+5..15V)</span>
+                  <span>TRG: Trigger (&lt; 1/3 Vcc)</span>
+                  <span>DIS: Discharge (Open Col)</span>
+                  <span>THR: Threshold (&gt; 2/3 Vcc)</span>
+                  <span>OUT: Output Driver</span>
+                  <span>GND: Ground (0V)</span>
+                  <span>CTL: Control (2/3 Vcc)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Logic Gate Parameters */}
+            {selectedComponent.type.startsWith('gate_') && (
+              <div className="space-y-2 p-2 rounded-lg bg-[#181a20] border border-[#252831]">
+                <div className="flex justify-between items-center text-[11px]">
+                  <span className="text-[#8b909f]">Logic Levels:</span>
+                  <span className="font-mono text-emerald-400 font-bold">
+                    High {(selectedComponent.params.vcc ?? 5.0).toFixed(1)}V · Vth {(selectedComponent.params.vth ?? 2.5).toFixed(1)}V
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">High V (Vcc)</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="1.5"
+                        max="15"
+                        value={selectedComponent.params.vcc ?? 5.0}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { vcc: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[#717684] block mb-0.5">Threshold Vth</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min="0.5"
+                        max="10"
+                        value={selectedComponent.params.vth ?? 2.5}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            onUpdateComponentParams(selectedComponent.id, { vth: val });
+                          }
+                        }}
+                        className="w-full bg-[#121317] border border-[#2d313b] focus:border-emerald-500 rounded px-2 py-1 text-xs font-mono text-[#f0f2f6] outline-none"
+                      />
+                      <span className="absolute right-2 top-1 text-[10px] text-[#717684] font-mono">V</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

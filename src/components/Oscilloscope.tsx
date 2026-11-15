@@ -11,7 +11,6 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   Crosshair,
   Sliders,
   X,
@@ -702,9 +701,8 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
           <button
             onClick={handleAutoSet}
             title="Auto-scale volts and timebase to center waveform"
-            className="px-2 py-0.5 rounded bg-[#1a2230] hover:bg-[#222e42] text-[#38bdf8] border border-[#26354a] text-[10px] font-mono font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            className="px-2 py-0.5 rounded bg-[#1a2230] hover:bg-[#222e42] text-[#38bdf8] border border-[#26354a] text-[10px] font-mono font-semibold flex items-center transition-colors cursor-pointer"
           >
-            <Sparkles className="w-3 h-3" />
             <span>AUTO</span>
           </button>
 
