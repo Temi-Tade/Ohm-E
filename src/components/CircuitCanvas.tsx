@@ -8,9 +8,8 @@ import { Sliders, Sun, Thermometer, Mic } from 'lucide-react';
 import {
   CircuitComponent,
   Wire,
-  Pin,
 } from '../types/circuit';
-import { getPinAbsolutePos, rotatePoint } from '../engine/componentFactory';
+import { getPinAbsolutePos } from '../engine/componentFactory';
 import { SchematicSymbol, formatVoltage, formatCurrent } from './SchematicSymbols';
 
 interface CircuitCanvasProps {
@@ -35,6 +34,7 @@ interface CircuitCanvasProps {
   isRunning?: boolean;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  fitTrigger?: number;
 }
 
 export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
@@ -59,9 +59,11 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
   showVoltColors,
   onDragStart,
   onDragEnd,
+  fitTrigger = 0,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const particleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const hasAutoFittedRef = useRef<boolean>(false);
 
   // Pan & Zoom state
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -125,10 +127,80 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
     setZoom(newZoom);
   };
 
+  // Fit circuit cleanly inside the visible canvas viewport
+  const fitCircuitToView = useCallback(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (width <= 0 || height <= 0) return;
+
+    if (components.length === 0) {
+      setPan({ x: 0, y: 0 });
+      setZoom(1.0);
+      return;
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const c of components) {
+      minX = Math.min(minX, c.x - 50);
+      maxX = Math.max(maxX, c.x + 50);
+      minY = Math.min(minY, c.y - 50);
+      maxY = Math.max(maxY, c.y + 50);
+    }
+
+    const circuitW = Math.max(maxX - minX, 160);
+    const circuitH = Math.max(maxY - minY, 160);
+    const padX = width >= 768 ? 140 : 64;
+    const padY = width >= 768 ? 120 : 80;
+
+    const targetZoom = Math.min(
+      1.35,
+      Math.max(0.55, Math.min((width - padX) / circuitW, (height - padY) / circuitH))
+    );
+    const roundedZoom = Math.round(targetZoom * 100) / 100;
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+
+    setZoom(roundedZoom);
+    setPan({
+      x: Math.round(width / 2 - cx * roundedZoom),
+      y: Math.round(height / 2 - cy * roundedZoom),
+    });
+  }, [components]);
+
+  // Initial desktop centering & explicit fitTrigger re-centering (e.g. loading a preset)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    if (!hasAutoFittedRef.current && container.clientWidth >= 768 && components.length > 0) {
+      hasAutoFittedRef.current = true;
+      fitCircuitToView();
+    }
+  }, [components.length, fitCircuitToView]);
+
+  const lastFitTriggerRef = useRef<number>(fitTrigger);
+  useEffect(() => {
+    if (fitTrigger !== lastFitTriggerRef.current) {
+      lastFitTriggerRef.current = fitTrigger;
+      fitCircuitToView();
+    }
+  }, [fitTrigger, fitCircuitToView]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
 
       if (e.key === 'r' || e.key === 'R') {
         if (selectedComponentId) {
@@ -136,16 +208,31 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
           onRotateComponent(selectedComponentId);
         }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        onDeleteSelected();
+        if (selectedComponentId || selectedWireId) {
+          e.preventDefault();
+          onDeleteSelected();
+        }
       } else if (e.key === 'Escape') {
-        setWiringFromPinId(null);
+        if (wiringFromPinId) {
+          setWiringFromPinId(null);
+        } else if (selectedComponentId || selectedWireId) {
+          onSelectComponent(null);
+          onSelectWire(null);
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedComponentId, selectedWireId, onRotateComponent, onDeleteSelected]);
+  }, [
+    selectedComponentId,
+    selectedWireId,
+    wiringFromPinId,
+    onRotateComponent,
+    onDeleteSelected,
+    onSelectComponent,
+    onSelectWire,
+  ]);
 
   // Particle Current Flow Animation Loop
   useEffect(() => {
@@ -385,7 +472,13 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchEnd}
       style={{ touchAction: 'none' }}
-      className="relative flex-1 h-full min-h-0 w-full bg-[#0e1013] overflow-hidden cursor-crosshair select-none"
+      className={`relative flex-1 h-full min-h-0 w-full bg-[#0e1013] overflow-hidden select-none ${
+        isPanning
+          ? 'cursor-grabbing'
+          : wiringFromPinId
+          ? 'cursor-crosshair'
+          : 'cursor-default'
+      }`}
     >
       {/* Background Blueprint Grid pattern */}
       <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-60">
@@ -892,7 +985,10 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
       {hoverTooltip && (
         <div
           className="fixed pointer-events-none z-50 bg-[#16181d] border border-[#2b2e38] px-2.5 py-1.5 rounded-md shadow-2xl text-xs font-mono"
-          style={{ left: hoverTooltip.x + 12, top: hoverTooltip.y }}
+          style={{
+            left: Math.min(hoverTooltip.x + 12, window.innerWidth - 220),
+            top: Math.max(54, hoverTooltip.y),
+          }}
         >
           <div className="font-semibold text-[#f0f2f6]">{hoverTooltip.text}</div>
           {hoverTooltip.subtext && (
@@ -915,6 +1011,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
 
         if (!isAdjustable) return null;
 
+        const containerW = containerRef.current?.clientWidth || window.innerWidth;
         const screenX = selectedComp.x * zoom + pan.x;
         const screenY = selectedComp.y * zoom + pan.y + 60 * zoom;
 
@@ -922,7 +1019,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
           <div
             className="absolute z-40 bg-[#141720]/95 backdrop-blur-md border border-[#2e3748] rounded-xl p-3 shadow-2xl flex flex-col gap-2 min-w-[210px] -translate-x-1/2 pointer-events-auto"
             style={{
-              left: Math.max(120, Math.min(window.innerWidth - 120, screenX)),
+              left: Math.max(120, Math.min(containerW - 120, screenX)),
               top: Math.max(65, screenY),
             }}
             onMouseDown={(e) => e.stopPropagation()}
@@ -1013,7 +1110,7 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
               <>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-[#94a3b8] font-medium flex items-center gap-1.5">
-                    <Thermometer className="w-3.5 h-3.5 text-rose-400" /> LM35 Temp
+                    <Thermometer className="w-3.5 h-3.5 text-rose-400" /> Temperature
                   </span>
                   <span className="font-mono text-rose-400 font-bold">
                     {selectedComp.params.temperature ?? 25} °C
@@ -1116,26 +1213,35 @@ export const CircuitCanvas: React.FC<CircuitCanvasProps> = ({
         </button>
         <div className="h-4 w-px bg-[#262832] mx-0.5" />
         <button
+          onClick={fitCircuitToView}
+          title="Center and fit circuit in viewport"
+          className="px-2 h-7 flex items-center justify-center hover:bg-[#22252e] hover:text-white rounded-md transition-colors text-[11px] cursor-pointer"
+        >
+          Fit
+        </button>
+        <button
           onClick={() => {
             setPan({ x: 0, y: 0 });
             setZoom(1.0);
           }}
-          title="Reset View"
+          title="Reset View (100%)"
           className="px-2 h-7 flex items-center justify-center hover:bg-[#22252e] hover:text-white rounded-md transition-colors text-[11px] cursor-pointer"
         >
-          Reset View
+          1:1
         </button>
       </div>
 
       {/* Keyboard Shortcuts Hint Bar (Desktop only, completely hidden on mobile) */}
       <div className="hidden md:flex absolute bottom-3 left-3 items-center gap-2 text-[10px] text-zinc-500 font-mono pointer-events-none select-none">
+        <span>[Space] Run/Pause</span>
+        <span>•</span>
         <span>[R] Rotate</span>
         <span>•</span>
         <span>[Del] Delete</span>
         <span>•</span>
-        <span>[Ctrl+Z] Undo</span>
+        <span>[Esc] Deselect</span>
         <span>•</span>
-        <span>[Ctrl+Y] Redo</span>
+        <span>[Ctrl+Z/Y] Undo/Redo</span>
       </div>
     </div>
   );

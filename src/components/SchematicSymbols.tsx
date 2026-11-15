@@ -354,15 +354,6 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
           />
           {/* Cathode bar at 14 */}
           <line x1="14" y1="-14" x2="14" y2="14" stroke={strokeColor} strokeWidth="3" strokeLinecap="round" />
-          <UprightText
-            x={0}
-            y={-18}
-            rot={rot}
-            textAnchor="middle"
-            className="fill-slate-400 text-[10px] font-mono pointer-events-none select-none"
-          >
-            1N4148
-          </UprightText>
         </g>
       );
 
@@ -1081,7 +1072,7 @@ export const SchematicSymbol: React.FC<SymbolProps> = ({
             textAnchor="middle"
             className="fill-rose-300 text-[9px] font-mono pointer-events-none select-none font-bold"
           >
-            LM35 {tempC}°C
+            {tempC}°C
           </UprightText>
         </g>
       );

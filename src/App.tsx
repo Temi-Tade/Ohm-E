@@ -17,21 +17,189 @@ import { RotateCw, Copy, Trash2, X, Sliders, Activity } from 'lucide-react';
 import { Toolbar } from './components/Toolbar';
 import { HelpModal } from './components/HelpModal';
 import { ExportModal } from './components/ExportModal';
+import { ToastContainer, ToastMessage, ToastVariant } from './components/ToastContainer';
+import { evaluateTopologyFaults, evaluateRuntimeFaults } from './engine/faultDetection';
 
 const CHANNEL_COLORS = ['#f97316', '#06b6d4', '#10b981']; // Ch0 Orange, Ch1 Cyan, Ch2 Emerald Green
+const WORKSPACE_STORAGE_KEY = 'ohm_e_workspace_v1';
 
 interface CircuitSnapshot {
   components: CircuitComponent[];
   wires: Wire[];
 }
 
+interface SavedWorkspace {
+  version: 1;
+  components: CircuitComponent[];
+  wires: Wire[];
+  isRunning: boolean;
+  simSpeed: number;
+  flowMode: 'conventional' | 'electron' | 'none';
+  showVoltColors: boolean;
+  soundEnabled: boolean;
+  isScopeOpen: boolean;
+  timebase: number;
+  voltsPerDiv: number;
+  coupling: 'dc' | 'ac';
+  showVoltage: boolean;
+  showCurrent: boolean;
+  probes: ScopeProbe[];
+  activeChannelIndex: number;
+}
+
+function createDefaultWorkspace(preset: CircuitPreset): SavedWorkspace {
+  return {
+    version: 1,
+    components: preset.components,
+    wires: preset.wires,
+    isRunning: true,
+    simSpeed: 1.0,
+    flowMode: 'conventional',
+    showVoltColors: true,
+    soundEnabled: false,
+    isScopeOpen: false,
+    timebase: preset.defaultScope?.timebase ?? 0.002,
+    voltsPerDiv: preset.defaultScope?.voltsPerDiv ?? 2.0,
+    coupling: 'dc',
+    showVoltage: true,
+    showCurrent: false,
+    probes: [],
+    activeChannelIndex: 0,
+  };
+}
+
+function loadSavedWorkspace(fallbackPreset: CircuitPreset): SavedWorkspace {
+  const defaults = createDefaultWorkspace(fallbackPreset);
+  if (typeof window === 'undefined') return defaults;
+
+  try {
+    const raw = window.localStorage.getItem(WORKSPACE_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.components) || !Array.isArray(parsed.wires)) {
+      return defaults;
+    }
+
+    const validComponents: CircuitComponent[] = parsed.components
+      .filter(
+        (c: unknown): c is CircuitComponent =>
+          Boolean(c) &&
+          typeof c === 'object' &&
+          typeof (c as CircuitComponent).id === 'string' &&
+          typeof (c as CircuitComponent).type === 'string' &&
+          typeof (c as CircuitComponent).x === 'number' &&
+          typeof (c as CircuitComponent).y === 'number' &&
+          Array.isArray((c as CircuitComponent).pins)
+      )
+      .map((c: CircuitComponent) => ({
+        ...c,
+        rotation: typeof c.rotation === 'number' ? c.rotation : 0,
+        params: c.params && typeof c.params === 'object' ? c.params : {},
+        state: undefined,
+      }));
+
+    const pinIds = new Set<string>();
+    const compIds = new Set<string>();
+    for (const c of validComponents) {
+      compIds.add(c.id);
+      for (const p of c.pins) pinIds.add(p.id);
+    }
+
+    const validWires: Wire[] = parsed.wires
+      .filter(
+        (w: unknown): w is Wire =>
+          Boolean(w) &&
+          typeof w === 'object' &&
+          typeof (w as Wire).id === 'string' &&
+          typeof (w as Wire).fromPinId === 'string' &&
+          typeof (w as Wire).toPinId === 'string' &&
+          pinIds.has((w as Wire).fromPinId) &&
+          pinIds.has((w as Wire).toPinId)
+      )
+      .map((w: Wire) => ({
+        id: w.id,
+        fromPinId: w.fromPinId,
+        toPinId: w.toPinId,
+      }));
+
+    const wireIds = new Set(validWires.map((w) => w.id));
+    const validProbes: ScopeProbe[] = Array.isArray(parsed.probes)
+      ? parsed.probes
+          .filter(
+            (p: unknown): p is ScopeProbe =>
+              Boolean(p) &&
+              typeof p === 'object' &&
+              typeof (p as ScopeProbe).targetId === 'string' &&
+              (((p as ScopeProbe).type === 'component' && compIds.has((p as ScopeProbe).targetId)) ||
+                ((p as ScopeProbe).type === 'wire' && wireIds.has((p as ScopeProbe).targetId)))
+          )
+          .slice(0, 3)
+          .map((p: ScopeProbe, idx: number) => ({
+            ...p,
+            channelIndex: idx,
+            color: CHANNEL_COLORS[idx] || '#f97316',
+          }))
+      : [];
+
+    const flowMode =
+      parsed.flowMode === 'conventional' || parsed.flowMode === 'electron' || parsed.flowMode === 'none'
+        ? parsed.flowMode
+        : defaults.flowMode;
+
+    return {
+      version: 1,
+      components: validComponents,
+      wires: validWires,
+      isRunning: typeof parsed.isRunning === 'boolean' ? parsed.isRunning : defaults.isRunning,
+      simSpeed:
+        typeof parsed.simSpeed === 'number' && parsed.simSpeed >= 0.25 && parsed.simSpeed <= 4
+          ? parsed.simSpeed
+          : defaults.simSpeed,
+      flowMode,
+      showVoltColors:
+        typeof parsed.showVoltColors === 'boolean' ? parsed.showVoltColors : defaults.showVoltColors,
+      soundEnabled:
+        typeof parsed.soundEnabled === 'boolean' ? parsed.soundEnabled : defaults.soundEnabled,
+      isScopeOpen:
+        typeof parsed.isScopeOpen === 'boolean' ? parsed.isScopeOpen : defaults.isScopeOpen,
+      timebase:
+        typeof parsed.timebase === 'number' && parsed.timebase > 0
+          ? parsed.timebase
+          : defaults.timebase,
+      voltsPerDiv:
+        typeof parsed.voltsPerDiv === 'number' && parsed.voltsPerDiv > 0
+          ? parsed.voltsPerDiv
+          : defaults.voltsPerDiv,
+      coupling: parsed.coupling === 'ac' ? 'ac' : 'dc',
+      showVoltage:
+        typeof parsed.showVoltage === 'boolean' ? parsed.showVoltage : defaults.showVoltage,
+      showCurrent:
+        typeof parsed.showCurrent === 'boolean' ? parsed.showCurrent : defaults.showCurrent,
+      probes: validProbes,
+      activeChannelIndex:
+        typeof parsed.activeChannelIndex === 'number' &&
+        parsed.activeChannelIndex >= 0 &&
+        parsed.activeChannelIndex < validProbes.length
+          ? parsed.activeChannelIndex
+          : 0,
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 export default function App() {
   const presets = useRef<CircuitPreset[]>(getPresetCircuits()).current;
-  const initialPreset = presets[0]; // RC Low-pass filter
+  const initialWorkspace = useRef<SavedWorkspace | null>(null);
+  if (!initialWorkspace.current) {
+    initialWorkspace.current = loadSavedWorkspace(presets[0]);
+  }
+  const initWs = initialWorkspace.current;
 
   // Circuit topology state
-  const [components, setComponents] = useState<CircuitComponent[]>(initialPreset.components);
-  const [wires, setWires] = useState<Wire[]>(initialPreset.wires);
+  const [components, setComponents] = useState<CircuitComponent[]>(initWs.components);
+  const [wires, setWires] = useState<Wire[]>(initWs.wires);
+  const [fitTrigger, setFitTrigger] = useState<number>(0);
 
   // Undo / Redo history
   const [undoStack, setUndoStack] = useState<CircuitSnapshot[]>([]);
@@ -42,32 +210,30 @@ export default function App() {
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
 
   // Simulation parameters
-  const [isRunning, setIsRunning] = useState<boolean>(true);
-  const [simSpeed, setSimSpeed] = useState<number>(1.0);
-  const [flowMode, setFlowMode] = useState<'conventional' | 'electron' | 'none'>('conventional');
-  const [showVoltColors, setShowVoltColors] = useState<boolean>(true);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(false);
+  const [isRunning, setIsRunning] = useState<boolean>(initWs.isRunning);
+  const [simSpeed, setSimSpeed] = useState<number>(initWs.simSpeed);
+  const [flowMode, setFlowMode] = useState<'conventional' | 'electron' | 'none'>(initWs.flowMode);
+  const [showVoltColors, setShowVoltColors] = useState<boolean>(initWs.showVoltColors);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(initWs.soundEnabled);
 
   // Oscilloscope state (multi-channel probes, V / I / Both modes)
-  const [timebase, setTimebase] = useState<number>(initialPreset.defaultScope?.timebase ?? 0.002);
-  const [voltsPerDiv, setVoltsPerDiv] = useState<number>(initialPreset.defaultScope?.voltsPerDiv ?? 2.0);
+  const [timebase, setTimebase] = useState<number>(initWs.timebase);
+  const [voltsPerDiv, setVoltsPerDiv] = useState<number>(initWs.voltsPerDiv);
   const [offsetY, setOffsetY] = useState<number>(0);
-  const [coupling, setCoupling] = useState<'dc' | 'ac'>('dc');
+  const [coupling, setCoupling] = useState<'dc' | 'ac'>(initWs.coupling);
   const [isScopePaused, setIsScopePaused] = useState<boolean>(false);
   const [scopeSamples, setScopeSamples] = useState<ScopeSample[]>([]);
-  const [isScopeOpen, setIsScopeOpen] = useState<boolean>(false);
-  const [showVoltage, setShowVoltage] = useState<boolean>(true);
-  const [showCurrent, setShowCurrent] = useState<boolean>(false);
-  const [activeChannelIndex, setActiveChannelIndex] = useState<number>(0);
+  const [isScopeOpen, setIsScopeOpen] = useState<boolean>(initWs.isScopeOpen);
+  const [showVoltage, setShowVoltage] = useState<boolean>(initWs.showVoltage);
+  const [showCurrent, setShowCurrent] = useState<boolean>(initWs.showCurrent);
+  const [activeChannelIndex, setActiveChannelIndex] = useState<number>(initWs.activeChannelIndex);
 
-  // Multi-channel probe configuration (up to 3 user-selected channels, empty until user selects)
-  const [probes, setProbes] = useState<ScopeProbe[]>([]);
+  // Multi-channel probe configuration (up to 3 simultaneous channels, empty until user selects)
+  const [probes, setProbes] = useState<ScopeProbe[]>(initWs.probes);
   const probesRef = useRef<ScopeProbe[]>(probes);
   useEffect(() => {
     probesRef.current = probes;
   }, [probes]);
-
-  const lastProbedCompRef = useRef<CircuitComponent | null>(null);
 
   // Mobile drawer & modal state
   const [isMobilePaletteOpen, setIsMobilePaletteOpen] = useState<boolean>(false);
@@ -97,15 +263,149 @@ export default function App() {
     wiresRef.current = wires;
   }, [wires]);
 
-  // Track the most recently selected component for the oscilloscope probe
+  // Toast notifications & edge-triggered electrical fault tracking
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const toastTimersRef = useRef<Map<string, number>>(new Map());
+  const activeTopologyFaultsRef = useRef<Set<string>>(new Set());
+  const activeRuntimeFaultsRef = useRef<Set<string>>(new Set());
+  const storageWarnedRef = useRef<boolean>(false);
+
+  const dismissToast = useCallback((id: string) => {
+    const timer = toastTimersRef.current.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      toastTimersRef.current.delete(id);
+    }
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const addToast = useCallback(
+    (variant: ToastVariant, title: string, description?: string) => {
+      const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const duration = variant === 'error' || variant === 'warning' ? 5000 : 3200;
+
+      setToasts((prev) => {
+        const filtered = prev.filter(
+          (t) => !(t.title === title && t.description === description)
+        );
+        return [...filtered.slice(-2), { id, variant, title, description }];
+      });
+
+      const timer = window.setTimeout(() => {
+        dismissToast(id);
+      }, duration);
+      toastTimersRef.current.set(id, timer);
+    },
+    [dismissToast]
+  );
+
   useEffect(() => {
-    if (selectedComponentId) {
-      const found = components.find((c) => c.id === selectedComponentId);
-      if (found) {
-        lastProbedCompRef.current = found;
+    const timers = toastTimersRef.current;
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer));
+      timers.clear();
+    };
+  }, []);
+
+  const syncRuntimeFaults = useCallback(
+    (comps: CircuitComponent[], result: SimulationResult | null) => {
+      const faults = evaluateRuntimeFaults(comps, result);
+      const nextKeys = new Set(faults.map((f) => f.key));
+      for (const f of faults) {
+        if (!activeRuntimeFaultsRef.current.has(f.key)) {
+          addToast(f.variant, f.title, f.description);
+        }
+      }
+      activeRuntimeFaultsRef.current = nextKeys;
+    },
+    [addToast]
+  );
+
+  // Sync mute state with saved audio setting
+  useEffect(() => {
+    audioEngine.setMuted(!soundEnabled);
+  }, [soundEnabled]);
+
+  // Detect topological short circuits immediately on wiring changes (even when paused)
+  useEffect(() => {
+    const faults = evaluateTopologyFaults(components, wires);
+    const nextKeys = new Set(faults.map((f) => f.key));
+    for (const f of faults) {
+      if (!activeTopologyFaultsRef.current.has(f.key)) {
+        addToast(f.variant, f.title, f.description);
       }
     }
-  }, [selectedComponentId, components]);
+    activeTopologyFaultsRef.current = nextKeys;
+  }, [components, wires, addToast]);
+
+  // LocalStorage persistence (debounced during edits + synchronous flush on page leave)
+  const latestPersistableRef = useRef<SavedWorkspace>(initWs);
+  latestPersistableRef.current = {
+    version: 1,
+    components: components.map(({ state: _state, ...rest }) => rest),
+    wires: wires.map(({ id, fromPinId, toPinId }) => ({ id, fromPinId, toPinId })),
+    isRunning,
+    simSpeed,
+    flowMode,
+    showVoltColors,
+    soundEnabled,
+    isScopeOpen,
+    timebase,
+    voltsPerDiv,
+    coupling,
+    showVoltage,
+    showCurrent,
+    probes,
+    activeChannelIndex,
+  };
+
+  const flushWorkspaceToStorage = useCallback(() => {
+    try {
+      window.localStorage.setItem(
+        WORKSPACE_STORAGE_KEY,
+        JSON.stringify(latestPersistableRef.current)
+      );
+      storageWarnedRef.current = false;
+    } catch {
+      if (!storageWarnedRef.current) {
+        storageWarnedRef.current = true;
+        addToast('warning', 'Auto-save unavailable', 'Browser storage is full or disabled.');
+      }
+    }
+  }, [addToast]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      flushWorkspaceToStorage();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    components,
+    wires,
+    isRunning,
+    simSpeed,
+    flowMode,
+    showVoltColors,
+    soundEnabled,
+    isScopeOpen,
+    timebase,
+    voltsPerDiv,
+    coupling,
+    showVoltage,
+    showCurrent,
+    probes,
+    activeChannelIndex,
+    flushWorkspaceToStorage,
+  ]);
+
+  useEffect(() => {
+    window.addEventListener('beforeunload', flushWorkspaceToStorage);
+    window.addEventListener('pagehide', flushWorkspaceToStorage);
+    return () => {
+      window.removeEventListener('beforeunload', flushWorkspaceToStorage);
+      window.removeEventListener('pagehide', flushWorkspaceToStorage);
+    };
+  }, [flushWorkspaceToStorage]);
 
   // Snapshot recording for Undo/Redo
   const recordSnapshot = useCallback(() => {
@@ -172,10 +472,21 @@ export default function App() {
     // Snapshotted at drag start
   }, []);
 
-  // Keyboard Shortcuts for Undo & Redo
+  // Keyboard Shortcuts for Undo, Redo, and Play/Pause
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+      if (e.code === 'Space' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        if (!isHelpOpen && !isExportOpen) {
+          e.preventDefault();
+          setIsRunning((prev) => !prev);
+        }
         return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
@@ -191,7 +502,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, isHelpOpen, isExportOpen]);
 
   // Main Simulation Loop
   useEffect(() => {
@@ -301,6 +612,10 @@ export default function App() {
           audioEngine.stop();
         }
 
+        if (lastResult) {
+          syncRuntimeFaults(componentsRef.current, lastResult);
+        }
+
         const now = performance.now();
         if (
           !isScopePaused &&
@@ -320,10 +635,11 @@ export default function App() {
       cancelAnimationFrame(animId);
       audioEngine.stop();
     };
-  }, [isRunning, simSpeed, components, wires, isScopePaused, soundEnabled, timebase, selectedComponentId, selectedWireId]);
+  }, [isRunning, simSpeed, components, wires, isScopePaused, soundEnabled, timebase, selectedComponentId, selectedWireId, syncRuntimeFaults]);
 
   const handleResetSim = () => {
     simulatorRef.current.reset();
+    activeRuntimeFaultsRef.current.clear();
     simTimeRef.current = 0;
     samplesBufferRef.current = [];
     setScopeSamples([]);
@@ -335,13 +651,14 @@ export default function App() {
       }))
     );
     setIsRunning(true);
+    addToast('info', 'Simulation restarted', 'Circuit time and component states reset.');
   };
 
-  // Add component to canvas
+  // Add component to canvas snapped to the 20px grid
   const handleAddComponent = (type: ComponentType) => {
     recordSnapshot();
-    const x = 360 + Math.round((Math.random() - 0.5) * 80);
-    const y = 260 + Math.round((Math.random() - 0.5) * 80);
+    const x = Math.round((360 + (Math.random() - 0.5) * 80) / 20) * 20;
+    const y = Math.round((260 + (Math.random() - 0.5) * 80) / 20) * 20;
     const newComp = createComponent(type, x, y);
     setComponents((prev) => [...prev, newComp]);
     setSelectedComponentId(newComp.id);
@@ -357,7 +674,10 @@ export default function App() {
         (w.fromPinId === fromPinId && w.toPinId === toPinId) ||
         (w.fromPinId === toPinId && w.toPinId === fromPinId)
     );
-    if (alreadyConnected) return;
+    if (alreadyConnected) {
+      addToast('info', 'Already connected', 'A wire already connects these terminals.');
+      return;
+    }
 
     recordSnapshot();
     const newWire: Wire = {
@@ -438,6 +758,7 @@ export default function App() {
     newComp.rotation = comp.rotation;
     setComponents((prev) => [...prev, newComp]);
     setSelectedComponentId(newComp.id);
+    addToast('info', `Duplicated ${comp.name}`);
   };
 
   const handleUpdateComponentParams = (
@@ -525,9 +846,6 @@ export default function App() {
               color: CHANNEL_COLORS[idx] || '#f97316',
             }))
         );
-        if (lastProbedCompRef.current?.id === selectedComponentId) {
-          lastProbedCompRef.current = null;
-        }
       }
       setComponents((prev) => prev.filter((c) => c.id !== selectedComponentId));
       setSelectedComponentId(null);
@@ -559,6 +877,11 @@ export default function App() {
         const w = wiresRef.current.find((wire) => wire.id === id);
         if (!w) return;
         name = `Wire (${id.slice(-4)})`;
+      }
+
+      const prevProbes = probesRef.current;
+      if (prevProbes.length >= 3 && !prevProbes.some((p) => p.targetId === id)) {
+        addToast('info', `Scope CH${activeChannelIndex + 1} updated`, `Now probing ${name}.`);
       }
 
       setProbes((prev) => {
@@ -594,7 +917,7 @@ export default function App() {
         return updated;
       });
     },
-    [activeChannelIndex]
+    [activeChannelIndex, addToast]
   );
 
   const handleToggleScopeForTarget = useCallback(
@@ -663,6 +986,8 @@ export default function App() {
   const handleLoadPreset = (preset: CircuitPreset) => {
     recordSnapshot();
     simulatorRef.current.reset();
+    activeTopologyFaultsRef.current.clear();
+    activeRuntimeFaultsRef.current.clear();
     simTimeRef.current = 0;
     samplesBufferRef.current = [];
     setScopeSamples([]);
@@ -670,7 +995,7 @@ export default function App() {
     setWires(preset.wires);
     setSelectedComponentId(null);
     setSelectedWireId(null);
-    lastProbedCompRef.current = null;
+    setFitTrigger((n) => n + 1);
 
     if (preset.defaultScope?.timebase) {
       setTimebase(preset.defaultScope.timebase);
@@ -682,12 +1007,17 @@ export default function App() {
     // Do not preselect components on the oscilloscope; only show user-selected components
     setProbes([]);
     setActiveChannelIndex(0);
+    const count = preset.components.filter((c) => c.type !== 'junction').length;
+    addToast('success', `Loaded ${preset.name}`, `${count} components, ${preset.wires.length} wires.`);
   };
 
   // Clear Canvas
   const handleClearCanvas = () => {
+    const hadItems = components.length > 0 || wires.length > 0;
     recordSnapshot();
     simulatorRef.current.reset();
+    activeTopologyFaultsRef.current.clear();
+    activeRuntimeFaultsRef.current.clear();
     simTimeRef.current = 0;
     samplesBufferRef.current = [];
     setScopeSamples([]);
@@ -697,7 +1027,9 @@ export default function App() {
     setActiveChannelIndex(0);
     setSelectedComponentId(null);
     setSelectedWireId(null);
-    lastProbedCompRef.current = null;
+    if (hadItems) {
+      addToast('info', 'Canvas cleared', 'Removed all components and wires.');
+    }
   };
 
   // Import JSON
@@ -714,20 +1046,40 @@ export default function App() {
         const parsed = JSON.parse(ev.target?.result as string);
         const importedComponents = parsed.components ?? parsed.internalComponents;
         const importedWires = parsed.wires ?? parsed.internalWires;
-        if (importedComponents && importedWires) {
+        if (Array.isArray(importedComponents) && Array.isArray(importedWires)) {
           recordSnapshot();
           simulatorRef.current.reset();
+          activeTopologyFaultsRef.current.clear();
+          activeRuntimeFaultsRef.current.clear();
           simTimeRef.current = 0;
           samplesBufferRef.current = [];
           setScopeSamples([]);
           setComponents(importedComponents);
           setWires(importedWires);
+          setSelectedComponentId(null);
+          setSelectedWireId(null);
+          setProbes([]);
+          setActiveChannelIndex(0);
+          setFitTrigger((n) => n + 1);
           if (parsed.timebase) setTimebase(parsed.timebase);
           if (parsed.voltsPerDiv) setVoltsPerDiv(parsed.voltsPerDiv);
-          lastProbedCompRef.current = importedComponents[0] ?? null;
+          const importedCount = importedComponents.filter(
+            (c: CircuitComponent) => c.type !== 'junction'
+          ).length;
+          addToast(
+            'success',
+            'Circuit imported',
+            `${file.name} (${importedCount} components, ${importedWires.length} wires)`
+          );
+        } else {
+          addToast(
+            'error',
+            'Import failed',
+            'File does not contain valid components and wires.'
+          );
         }
-      } catch (err) {
-        // Ignore invalid file
+      } catch {
+        addToast('error', 'Import failed', 'Selected file is not valid schematic JSON.');
       }
     };
     reader.readAsText(file);
@@ -745,7 +1097,13 @@ export default function App() {
         onToggleRun={() => setIsRunning(!isRunning)}
         onStepOnce={() => {
           simTimeRef.current += 0.0005;
-          simulatorRef.current.step(components, wires, simTimeRef.current, 0.0005);
+          const stepRes = simulatorRef.current.step(
+            components,
+            wires,
+            simTimeRef.current,
+            0.0005
+          );
+          syncRuntimeFaults(componentsRef.current, stepRes);
         }}
         onReset={handleResetSim}
         onClearCanvas={handleClearCanvas}
@@ -774,10 +1132,8 @@ export default function App() {
         onExportJson={() => setIsExportOpen(true)}
         onImportJson={handleImportJson}
         onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenMobilePalette={() => setIsMobilePaletteOpen(true)}
         isScopeOpen={isScopeOpen}
         onToggleScope={() => setIsScopeOpen(!isScopeOpen)}
-        selectedComponentName={selectedComp ? selectedComp.name : null}
       />
 
       {/* Main Workspace: Palette on Left, Canvas in Center, Inspector on Right */}
@@ -831,6 +1187,7 @@ export default function App() {
               showVoltColors={showVoltColors}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              fitTrigger={fitTrigger}
             />
 
             {/* Floating Action Toolbar for Selected Component */}
@@ -866,10 +1223,10 @@ export default function App() {
                   <RotateCw className="w-4 h-4" />
                 </button>
 
-                {/* Edit / Inspect Parameters Button */}
+                {/* Edit / Inspect Parameters Button (Mobile only since Desktop sidebar is always visible) */}
                 <button
                   onClick={() => setIsMobileInspectorOpen(true)}
-                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
+                  className="md:hidden w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] hover:bg-[#292d36] active:bg-[#181a20] border border-[#2d313c] text-[#e4e7ee] flex items-center justify-center cursor-pointer transition-colors"
                   title="Edit Component Parameters"
                   aria-label="Edit Parameters"
                 >
@@ -936,7 +1293,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={() => setIsMobileInspectorOpen(true)}
-                  className="w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] text-[#e4e7ee] hover:bg-[#292d36] border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
+                  className="md:hidden w-9 h-9 min-w-[36px] min-h-[36px] rounded-lg bg-[#20232a] text-[#e4e7ee] hover:bg-[#292d36] border border-[#2d313c] flex items-center justify-center cursor-pointer transition-colors"
                   title="Wire Info"
                   aria-label="Wire Info"
                 >
@@ -994,14 +1351,6 @@ export default function App() {
             activeChannelIndex={activeChannelIndex}
             onSelectChannel={setActiveChannelIndex}
             onRemoveProbe={handleRemoveProbe}
-            onAddCurrentSelectedProbe={() =>
-              handleAutoProbeOnSelect(
-                selectedComp?.id || selectedWire?.id || '',
-                selectedComp ? 'component' : 'wire'
-              )
-            }
-            selectedComponent={selectedComp ?? lastProbedCompRef.current}
-            selectedWire={selectedWire}
             timebase={timebase}
             onTimebaseChange={setTimebase}
             voltsPerDiv={voltsPerDiv}
@@ -1015,12 +1364,6 @@ export default function App() {
             onClearSamples={() => {
               samplesBufferRef.current = [];
               setScopeSamples([]);
-            }}
-            soundEnabled={soundEnabled}
-            onToggleSound={() => {
-              const next = !soundEnabled;
-              setSoundEnabled(next);
-              audioEngine.setMuted(!next);
             }}
             showVoltage={showVoltage}
             showCurrent={showCurrent}
@@ -1069,7 +1412,11 @@ export default function App() {
         wires={wires}
         timebase={timebase}
         voltsPerDiv={voltsPerDiv}
+        onNotify={addToast}
       />
+
+      {/* Toast Notification Stack */}
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </div>
   );
 }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Play,
   Pause,
@@ -49,10 +49,8 @@ interface ToolbarProps {
   onExportJson: () => void;
   onImportJson: () => void;
   onOpenHelp: () => void;
-  onOpenMobilePalette?: () => void;
   isScopeOpen?: boolean;
   onToggleScope?: () => void;
-  selectedComponentName?: string | null;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -78,13 +76,36 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onExportJson,
   onImportJson,
   onOpenHelp,
-  onOpenMobilePalette,
-  isScopeOpen,
+  isScopeOpen = false,
   onToggleScope,
-  selectedComponentName,
 }) => {
   const [isPresetsOpen, setIsPresetsOpen] = useState<boolean>(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState<boolean>(false);
+  const rightControlsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isPresetsOpen && !isMoreMenuOpen) return;
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if (rightControlsRef.current && !rightControlsRef.current.contains(e.target as Node)) {
+        setIsPresetsOpen(false);
+        setIsMoreMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsPresetsOpen(false);
+        setIsMoreMenuOpen(false);
+      }
+    };
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('touchstart', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('touchstart', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isPresetsOpen, isMoreMenuOpen]);
 
   const cycleSpeed = () => {
     if (simSpeed <= 0.6) onSpeedChange(1.0);
@@ -93,7 +114,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   };
 
   return (
-    <header className="h-12 bg-[#15171b] border-b border-[#252831] px-2 sm:px-3 flex items-center justify-between select-none z-30 shrink-0">
+    <header className="h-12 bg-[#15171b] border-b border-[#252831] px-2 sm:px-3 flex items-center justify-between gap-2 select-none z-30 shrink-0">
       {/* Brand Icon & Wordmark */}
       <div className="flex items-center gap-2 shrink-0">
         <div className="w-7 h-7 rounded-md bg-[#1d1f25] border border-[#2d313b] flex items-center justify-center shrink-0">
@@ -101,7 +122,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
             <path d="M4 20h4.5a3.5 3.5 0 0 0 3-1.8 7 7 0 1 1 5 0 3.5 3.5 0 0 0 3 1.8H20" />
           </svg>
         </div>
-        <span className="font-semibold text-sm tracking-tight text-[#f0f2f6] hidden xs:inline">Ohm-E</span>
+        <span className="font-semibold text-sm tracking-tight text-[#f0f2f6] hidden sm:inline">Ohm-E</span>
       </div>
 
       {/* Center Controls */}
@@ -211,10 +232,27 @@ export const Toolbar: React.FC<ToolbarProps> = ({
           <Palette className="w-3.5 h-3.5" />
           <span>Volt Colors: {showVoltColors ? 'On' : 'Off'}</span>
         </button>
+
+        {/* Oscilloscope Toggle (Desktop quick-access; mobile uses selected component floating bar) */}
+        {onToggleScope && (
+          <button
+            onClick={onToggleScope}
+            title={isScopeOpen ? 'Hide Oscilloscope' : 'Open Multi-Channel Oscilloscope'}
+            aria-label="Toggle Oscilloscope"
+            className={`hidden md:flex px-2.5 py-1.5 rounded-md border text-xs items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+              isScopeOpen
+                ? 'bg-[#1a2536] border-[#38bdf8] text-[#38bdf8]'
+                : 'bg-[#1e2026] border-[#282b34] text-[#cfd3dd] hover:bg-[#272a33]'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5 text-[#38bdf8]" />
+            <span className="hidden xl:inline">Scope</span>
+          </button>
+        )}
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+      <div ref={rightControlsRef} className="flex items-center gap-1 sm:gap-1.5 shrink-0">
         {/* Preset Circuits Dropdown */}
         <div className="relative">
           <button

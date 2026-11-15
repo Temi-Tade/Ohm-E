@@ -567,7 +567,7 @@ export function createComponent(
       return {
         id,
         type,
-        name: 'Analog Temp Sensor (LM35)',
+        name: 'Analog Temp Sensor',
         x,
         y,
         rotation: 0,

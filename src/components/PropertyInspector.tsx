@@ -5,13 +5,9 @@
 
 import React from 'react';
 import {
-  RotateCw,
-  Trash2,
-  Copy,
   Zap,
   Activity,
   Layers,
-  Thermometer,
   ShieldAlert,
   X,
 } from 'lucide-react';
@@ -1471,7 +1467,7 @@ export const PropertyInspector: React.FC<PropertyInspectorProps> = ({
             {/* 555 Timer Pinout Reference */}
             {selectedComponent.type === 'timer_555' && (
               <div className="space-y-1.5 p-2 rounded-lg bg-[#181a20] border border-[#252831] text-[10px]">
-                <span className="text-[#8b909f] font-semibold block">NE555 Pinout Reference</span>
+                <span className="text-[#8b909f] font-semibold block">555 Timer Pinout</span>
                 <div className="grid grid-cols-2 gap-1 font-mono text-[#94a3b8]">
                   <span>RST: Reset (Active Low)</span>
                   <span>VCC: Supply (+5..15V)</span>

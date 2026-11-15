@@ -11,12 +11,10 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Crosshair,
   Sliders,
   X,
-  Plus,
 } from 'lucide-react';
-import { ScopeSample, ScopeProbe, CircuitComponent, Wire } from '../types/circuit';
+import { ScopeSample, ScopeProbe } from '../types/circuit';
 import { formatVoltage, formatCurrent } from './SchematicSymbols';
 
 interface OscilloscopeProps {
@@ -27,9 +25,6 @@ interface OscilloscopeProps {
   activeChannelIndex: number;
   onSelectChannel: (idx: number) => void;
   onRemoveProbe: (idx: number) => void;
-  onAddCurrentSelectedProbe?: () => void;
-  selectedComponent: CircuitComponent | null;
-  selectedWire: Wire | null;
   timebase: number; // seconds per division, e.g. 0.002 = 2ms/div
   onTimebaseChange: (val: number) => void;
   voltsPerDiv: number;
@@ -41,14 +36,10 @@ interface OscilloscopeProps {
   isPaused: boolean;
   onTogglePause: () => void;
   onClearSamples: () => void;
-  soundEnabled: boolean;
-  onToggleSound: () => void;
   showVoltage: boolean;
   showCurrent: boolean;
   onToggleVoltage: () => void;
   onToggleCurrent: () => void;
-  isMinimized?: boolean;
-  onToggleMinimize?: () => void;
 }
 
 const TIMEBASE_OPTIONS = [
@@ -88,9 +79,6 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
   activeChannelIndex = 0,
   onSelectChannel,
   onRemoveProbe,
-  onAddCurrentSelectedProbe,
-  selectedComponent,
-  selectedWire,
   timebase,
   onTimebaseChange,
   voltsPerDiv,
@@ -112,18 +100,9 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [showControlsDrawer, setShowControlsDrawer] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'signal' | 'timebase' | 'trigger'>('signal');
-  const [mobileTab, setMobileTab] = useState<'screen' | 'knobs'>('screen');
 
   // Trigger settings
-  const [triggerLevel, setTriggerLevel] = useState<number>(0);
   const [triggerEdge, setTriggerEdge] = useState<'rising' | 'falling'>('rising');
-
-  // Cursors
-  const [showCursors, setShowCursors] = useState<boolean>(false);
-  const [cursorX1, setCursorX1] = useState<number>(0.25);
-  const [cursorX2, setCursorX2] = useState<number>(0.75);
-  const [cursorY1, setCursorY1] = useState<number>(0.3);
-  const [cursorY2, setCursorY2] = useState<number>(0.7);
 
   // Active channel probe
   const activeProbe = probes[activeChannelIndex] ?? probes[0] ?? null;
@@ -368,10 +347,7 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
 
           // Only attempt periodic edge trigger if there is meaningful AC swing
           if (trigVpp > (isCurrentTrig ? 0.0005 : 0.05)) {
-            const effectiveTrigLevel =
-              !isCurrentTrig && Math.abs(triggerLevel) > 0.05
-                ? triggerLevel
-                : trigMid;
+            const effectiveTrigLevel = trigMid;
 
             const maxTrigTime = tLatest - totalTimeSpan;
             const minTrigTime = Math.max(tEarliest, tLatest - 3.0 * totalTimeSpan);
@@ -558,31 +534,6 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
       ctx.fillStyle = '#cbd5e1';
       ctx.fillText(tbText, width - 12, height - 13);
 
-      // Render Cursors if active
-      if (showCursors) {
-        const x1 = leftMargin + cursorX1 * gridWidth;
-        const x2 = leftMargin + cursorX2 * gridWidth;
-        ctx.strokeStyle = 'rgba(236, 72, 153, 0.7)';
-        ctx.setLineDash([3, 3]);
-        ctx.beginPath();
-        ctx.moveTo(x1, 0);
-        ctx.lineTo(x1, height);
-        ctx.moveTo(x2, 0);
-        ctx.lineTo(x2, height);
-        ctx.stroke();
-
-        const y1 = cursorY1 * height;
-        const y2 = cursorY2 * height;
-        ctx.strokeStyle = 'rgba(52, 211, 153, 0.7)';
-        ctx.beginPath();
-        ctx.moveTo(leftMargin, y1);
-        ctx.lineTo(width, y1);
-        ctx.moveTo(leftMargin, y2);
-        ctx.lineTo(width, y2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
       ctx.restore();
     };
 
@@ -606,26 +557,13 @@ export const Oscilloscope: React.FC<OscilloscopeProps> = ({
     voltsPerDiv,
     offsetY,
     coupling,
-    triggerLevel,
     triggerEdge,
-    showCursors,
-    cursorX1,
-    cursorX2,
-    cursorY1,
-    cursorY2,
     measurements,
   ]);
 
   if (!isOpen) {
     return null;
   }
-
-  const selectedName = selectedComponent?.name || (selectedWire ? 'Selected Wire' : null);
-  const isSelectedAlreadyProbed = selectedComponent
-    ? probes.some((p) => p.id === selectedComponent.id)
-    : selectedWire
-    ? probes.some((p) => p.id === selectedWire.id)
-    : false;
 
   return (
     <div

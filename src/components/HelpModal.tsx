@@ -3,16 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Activity,
   Zap,
   RotateCw,
   GitCommit,
-  Sliders,
   ToggleLeft,
   X,
-  Volume2,
 } from 'lucide-react';
 
 interface HelpModalProps {
@@ -21,11 +19,29 @@ interface HelpModalProps {
 }
 
 export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-[#15171b] border border-[#2b2e38] w-full max-w-xl rounded-xl shadow-2xl overflow-hidden flex flex-col text-[#cfd3dd]">
+    <div
+      className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[#15171b] border border-[#2b2e38] w-full max-w-xl rounded-xl shadow-2xl overflow-hidden flex flex-col text-[#cfd3dd]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 border-b border-[#252831] flex items-center justify-between bg-[#17191e]">
           <div className="flex items-center gap-2.5">
@@ -86,7 +102,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
                 <span className="sm:hidden">Touch Gestures & Controls</span>
               </div>
               <p className="text-[#8b909f] text-[11px] leading-relaxed hidden sm:block">
-                Press <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">R</kbd> to rotate, <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Del</kbd> to remove, and <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Ctrl+Z</kbd> / <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Ctrl+Y</kbd> to undo/redo.
+                Press <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Space</kbd> to run/pause, <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">R</kbd> to rotate, <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Del</kbd> to remove, <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Esc</kbd> to deselect, and <kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Ctrl+Z</kbd>/<kbd className="px-1 py-0.5 rounded bg-[#252831] border border-[#3b3f4d] font-mono text-white">Y</kbd> to undo/redo. Scroll to zoom and drag background to pan.
               </p>
               <p className="text-[#8b909f] text-[11px] leading-relaxed sm:hidden">
                 Tap a component to select it and use the action buttons to rotate, edit, or delete. Tap terminals to connect wires. Pinch to zoom and drag with two fingers to pan.

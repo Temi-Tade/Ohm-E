@@ -27,7 +27,7 @@ const PALETTE_ITEMS: PaletteItem[] = [
   { type: 'photoresistor', label: 'Photoresistor (LDR)', category: 'sensors', hint: 'Light-dependent resistor (Lux)' },
   { type: 'thermistor', label: 'NTC Thermistor', category: 'sensors', hint: 'Temp-dependent resistor (°C)' },
   { type: 'pir_sensor', label: 'PIR Motion Sensor', category: 'sensors', hint: 'Infrared motion detector module' },
-  { type: 'temp_sensor', label: 'Analog Temp Sensor (LM35)', category: 'sensors', hint: 'Linear 10mV/°C temperature probe' },
+  { type: 'temp_sensor', label: 'Analog Temp Sensor', category: 'sensors', hint: 'Linear 10mV/°C temperature probe' },
   { type: 'sound_sensor', label: 'Sound / Mic Sensor', category: 'sensors', hint: 'Acoustic sound sensor module' },
 
   // Sources

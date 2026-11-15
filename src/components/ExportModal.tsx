@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   X,
   FileCode2,
@@ -26,6 +26,7 @@ import {
   exportKicadPcb,
   exportPcbArtworkSvg,
 } from '../engine/exportHelpers';
+import { ToastVariant } from './ToastContainer';
 
 export type ExportFormat = 'json' | 'pdf' | 'png' | 'chip' | 'pcb';
 
@@ -36,6 +37,7 @@ interface ExportModalProps {
   wires: Wire[];
   timebase: number;
   voltsPerDiv: number;
+  onNotify?: (variant: ToastVariant, title: string, description?: string) => void;
 }
 
 const FORMAT_OPTIONS: {
@@ -89,6 +91,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   wires,
   timebase,
   voltsPerDiv,
+  onNotify,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('json');
   const [projectName, setProjectName] = useState<string>('ohm_e_schematic');
@@ -114,6 +117,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   const pcbLayout = useMemo(() => generatePcbLayout(exportData), [exportData]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const activeOption = FORMAT_OPTIONS.find((f) => f.id === selectedFormat)!;
@@ -127,22 +142,35 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   const handlePrimaryExport = async () => {
     setIsExporting(true);
     try {
+      const safeName = exportData.name;
       if (selectedFormat === 'json') {
         exportCircuitJson(exportData);
         flashStatus('Exported schematic JSON');
+        onNotify?.('success', 'Circuit exported (JSON)', `${safeName}.json downloaded.`);
       } else if (selectedFormat === 'pdf') {
         exportCircuitPdf(exportData);
         flashStatus('Exported vector PDF sheet');
+        onNotify?.('success', 'Circuit exported (PDF)', `${safeName}.pdf schematic sheet downloaded.`);
       } else if (selectedFormat === 'png') {
         await exportCircuitPng(exportData);
         flashStatus('Exported 2x PNG image');
+        onNotify?.('success', 'Circuit exported (PNG)', `${safeName}.png snapshot downloaded.`);
       } else if (selectedFormat === 'chip') {
         exportChipPackageJson(chipSpec);
         flashStatus(`Exported ${chipSpec.packageType} chip package`);
+        onNotify?.(
+          'success',
+          `Exported ${chipSpec.packageType} chip`,
+          `${safeName}.chip.json package downloaded.`
+        );
       } else if (selectedFormat === 'pcb') {
         exportKicadPcb(pcbLayout);
         flashStatus('Exported KiCad .kicad_pcb board');
+        onNotify?.('success', 'Exported KiCad PCB', `${safeName}.kicad_pcb layout downloaded.`);
       }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to generate export file.';
+      onNotify?.('error', 'Export failed', message);
     } finally {
       setIsExporting(false);
     }
@@ -431,8 +459,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                     </div>
                     <button
                       onClick={() => {
-                        exportChipPinoutSvg(chipSpec);
-                        flashStatus('Downloaded DIP pinout SVG');
+                        try {
+                          exportChipPinoutSvg(chipSpec);
+                          flashStatus('Downloaded DIP pinout SVG');
+                          onNotify?.(
+                            'success',
+                            'Exported chip pinout SVG',
+                            `${chipSpec.packageType} diagram downloaded.`
+                          );
+                        } catch {
+                          onNotify?.('error', 'Export failed', 'Unable to export chip pinout SVG.');
+                        }
                       }}
                       className="mt-1 px-2.5 py-1 rounded bg-[#1a1d24] hover:bg-[#232730] border border-[#2d313b] text-[#cfd3dd] text-[10px] cursor-pointer"
                     >
@@ -613,8 +650,13 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   <span>Layers: Orange = F.Cu · Cyan = B.Cu · Gold = ENIG Pads</span>
                   <button
                     onClick={() => {
-                      exportPcbArtworkSvg(pcbLayout);
-                      flashStatus('Downloaded PCB artwork SVG');
+                      try {
+                        exportPcbArtworkSvg(pcbLayout);
+                        flashStatus('Downloaded PCB artwork SVG');
+                        onNotify?.('success', 'Exported PCB artwork SVG', `${exportData.name}_pcb.svg downloaded.`);
+                      } catch {
+                        onNotify?.('error', 'Export failed', 'Unable to export PCB artwork SVG.');
+                      }
                     }}
                     className="px-2.5 py-1 rounded bg-[#1a1d24] hover:bg-[#232730] border border-[#2d313b] text-[#cfd3dd] cursor-pointer"
                   >
